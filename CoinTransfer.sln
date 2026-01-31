@@ -1,9 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36414.22 d17.14
+VisualStudioVersion = 17.14.36414.22
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoinTransfer", "CoinTransfer\CoinTransfer.csproj", "{A7FE4FB7-9D53-48E7-8743-F15CE9138307}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExchangeAPIController", "ExchangeAPIController\ExchangeAPIController.csproj", "{234684C5-7C67-BFBA-930D-5716592A2105}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CommonUtil", "CommonUtil\CommonUtil.csproj", "{4B3BD594-ED67-7832-9621-EB013E05AA0F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{A7FE4FB7-9D53-48E7-8743-F15CE9138307}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A7FE4FB7-9D53-48E7-8743-F15CE9138307}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A7FE4FB7-9D53-48E7-8743-F15CE9138307}.Release|Any CPU.Build.0 = Release|Any CPU
+		{234684C5-7C67-BFBA-930D-5716592A2105}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{234684C5-7C67-BFBA-930D-5716592A2105}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{234684C5-7C67-BFBA-930D-5716592A2105}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{234684C5-7C67-BFBA-930D-5716592A2105}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4B3BD594-ED67-7832-9621-EB013E05AA0F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B3BD594-ED67-7832-9621-EB013E05AA0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B3BD594-ED67-7832-9621-EB013E05AA0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B3BD594-ED67-7832-9621-EB013E05AA0F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
