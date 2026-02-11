@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,10 +9,10 @@ namespace ExchangeAPIController
     public enum EnumExchange
     {
         Debug,
+        Binance,
         //Upbit,
         //Bithumb,
         //Huobi,
-        //Binance,
         //Binance_Future,
         //Coinone,
         Bybit,
@@ -53,5 +53,5 @@ namespace ExchangeAPIController
         CANCELED,
         FILLED,
     }
-    
+
 }

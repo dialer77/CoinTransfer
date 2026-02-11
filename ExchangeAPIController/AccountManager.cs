@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -25,7 +25,7 @@ namespace ExchangeAPIController
 
         public void SetLastErrorMessage(string msg)
         {
-            m_lastErrorMessage = msg;   
+            m_lastErrorMessage = msg;
         }
 
         public void SetExchange(EnumExchange exchange)
@@ -43,7 +43,9 @@ namespace ExchangeAPIController
                 case EnumExchange.Bybit:
                     return m_accountBybit;
                 case EnumExchange.MEXC:
-                    return m_accountMexc; 
+                    return m_accountMexc;
+                case EnumExchange.Binance:
+                    return m_accountBinance;
                 default:
                     return m_accountDebug;
             }
@@ -54,8 +56,9 @@ namespace ExchangeAPIController
 
         private Account m_accountBybit = new Account(EnumExchange.Bybit);
 
-        private Account m_accountMexc = new Account (EnumExchange.MEXC);
-        
+        private Account m_accountMexc = new Account(EnumExchange.MEXC);
+
+        private Account m_accountBinance = new Account(EnumExchange.Binance);
     }
 
     public class Account
@@ -78,7 +81,7 @@ namespace ExchangeAPIController
         public async Task<bool> RefreshAccount()
         {
             (bool, List<Currency>) accountResult = await ExchangeApiManager.GetInstance().GetExchangeAPIController(m_exchange).GetCoinHoldingForMyAccount();
-            
+
             if (accountResult.Item1)
             {
                 Currencies = accountResult.Item2;

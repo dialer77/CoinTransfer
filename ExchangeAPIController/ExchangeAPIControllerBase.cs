@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -46,6 +46,14 @@ namespace ExchangeAPIController
         }
 
         /// <summary>
+        /// Travel Rule 준수 필요 여부 확인 (Binance 등 일부 거래소만 해당)
+        /// </summary>
+        public virtual Task<(bool required, string info)> CheckTravelRuleRequiredAsync()
+        {
+            return Task.FromResult((false, ""));
+        }
+
+        /// <summary>
         ///  코인 출금
         /// </summary>
         /// <param name="coinName"></param>
@@ -71,14 +79,14 @@ namespace ExchangeAPIController
         /// </summary>
         /// <param name="identifier"></param>
         /// <returns></returns>
-        public abstract Task<(bool, string)> CancelOrder(string coinCode,  string identifier);
+        public abstract Task<(bool, string)> CancelOrder(string coinCode, string identifier);
 
         /// <summary>
         /// 현재 거래가격에 맞는 최소 주문단위에 맞게 가격 계산
         /// </summary>
         /// <param name="price"></param>
         /// <returns></returns>
-        public abstract double CalcOrderPrice(string coinCode,  double price);
+        public abstract double CalcOrderPrice(string coinCode, double price);
 
         /// <summary>
         /// 현재 거래가격에 맞는 최소 주문단위에 맞게 거래 수량 계산

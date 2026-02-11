@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,7 +12,7 @@ namespace ExchangeAPIController
 
         public static ExchangeApiManager GetInstance()
         {
-            if(s_instance == null)
+            if (s_instance == null)
             {
                 s_instance = new ExchangeApiManager();
             }
@@ -20,7 +20,7 @@ namespace ExchangeAPIController
             return s_instance;
         }
 
-        public  ExchangeAPIControllerBase GetExchangeAPIController(EnumExchange exchange)
+        public ExchangeAPIControllerBase GetExchangeAPIController(EnumExchange exchange)
         {
             ExchangeAPIControllerBase controller = null;
 
@@ -33,20 +33,23 @@ namespace ExchangeAPIController
                     controller = new ExchangeAPIControllerBybit();
                     break;
                 case EnumExchange.MEXC:
-                controller = new ExchangeAPIControllerMexc();
+                    controller = new ExchangeAPIControllerMexc();
                     break;
-                //case EnumExchange.Bithumb:
-                //    controller = new ExchangeAPIControllerBithumb();
-                //    break;
-                //case EnumExchange.Huobi:
-                //    controller = new ExchangeAPIControllerHuobi();
-                //    break;
-                //case EnumExchange.Binance:
-                //    controller = new ExchangeAPIControllerBinance();
-                //    break;
-                //case EnumExchange.Coinone:
-                //    controller = new ExchangeAPIControllerCoinone();
-                //    break;
+                case EnumExchange.Binance:
+                    controller = new ExchangeAPIControllerBinance();
+                    break;
+                    //case EnumExchange.Bithumb:
+                    //    controller = new ExchangeAPIControllerBithumb();
+                    //    break;
+                    //case EnumExchange.Huobi:
+                    //    controller = new ExchangeAPIControllerHuobi();
+                    //    break;
+                    //case EnumExchange.Binance:
+                    //    controller = new ExchangeAPIControllerBinance();
+                    //    break;
+                    //case EnumExchange.Coinone:
+                    //    controller = new ExchangeAPIControllerCoinone();
+                    //    break;
             }
 
             return controller;
