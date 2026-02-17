@@ -1,4 +1,4 @@
-﻿using bybit.net.api.Models.Account;
+using bybit.net.api.Models.Account;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using RestSharp;
@@ -28,6 +28,28 @@ namespace ExchangeAPIController
             return m_lastErrorMessage;
         }
 
+        /// <summary>바이비트 서버 시간(ms). 타임스탬프 오차 보정용.</summary>
+        private async Task<long> GetBybitServerTimeMsAsync()
+        {
+            try
+            {
+                var client = new RestClient(BASE_URL);
+                var request = new RestRequest("/v5/market/time", Method.Get);
+                RestResponse response = await client.ExecuteAsync(request);
+                if (response.IsSuccessful && !string.IsNullOrEmpty(response.Content))
+                {
+                    var jo = JObject.Parse(response.Content);
+                    if (jo["retCode"]?.Value<int>() == 0 && jo["result"]?["timeSecond"] != null)
+                    {
+                        long sec = long.Parse(jo["result"]["timeSecond"].ToString());
+                        return sec * 1000;
+                    }
+                }
+            }
+            catch { /* fallback to client time */ }
+            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+
         public async override Task<(bool, List<Currency>)> GetCoinHoldingForMyAccount()
         {
             bool bResult = false;
@@ -36,50 +58,81 @@ namespace ExchangeAPIController
             {
                 string accessKey = ApikeySetting.GetInstance().GetExchangeAccessKey(m_exchange);
                 string secretKey = ApikeySetting.GetInstance().GetExchangeSecretKey(m_exchange);
-                BybitAccountService accountService = new BybitAccountService(accessKey, secretKey, url: BASE_URL);
 
-                string responseResult = await accountService.GetAccountBalance(AccountType.Unified);
+                // 서버 시간 사용 시 타임스탬프 오차로 invalid request 방지 (recv_window 내에 맞춤)
+                long timestamp = await GetBybitServerTimeMsAsync();
+                const string recvWindow = "60000"; // 60초 허용 (PC 시계 오차 대응)
+                string queryString = "accountType=UNIFIED";
+                string signature = CreateSignatureV5Get(timestamp, accessKey, recvWindow, queryString, secretKey);
 
-                // 응답 구조에 맞게 파싱
+                var client = new RestClient(BASE_URL);
+                var request = new RestRequest("/v5/account/wallet-balance", Method.Get);
+                request.AddQueryParameter("accountType", "UNIFIED");
+                request.AddHeader("X-BAPI-API-KEY", accessKey);
+                request.AddHeader("X-BAPI-SIGN", signature);
+                request.AddHeader("X-BAPI-TIMESTAMP", timestamp.ToString());
+                request.AddHeader("X-BAPI-RECV-WINDOW", recvWindow);
+                request.AddHeader("Accept", "application/json");
+
+                RestResponse response = await client.ExecuteAsync(request);
+                string responseResult = response?.Content ?? "";
+
+                if (!response.IsSuccessful)
+                {
+                    m_lastErrorMessage = $"HTTP {(int)response.StatusCode}: {response.ErrorMessage}";
+                    return (false, currencies);
+                }
+
                 JObject responseObj = JObject.Parse(responseResult);
-                if (responseObj["retCode"].ToString() == "0") // Success check
+                if (responseObj["retCode"]?.Value<int>() != 0)
                 {
-                    var coinList = responseObj["result"]["list"][0]["coin"].ToObject<JArray>();
-                    foreach (JObject obj in coinList)
-                    {
-                        string currencyCode = obj["coin"].ToString();
-                        double balance = double.Parse(obj["walletBalance"].ToString());
-                        double locked = double.Parse(obj["locked"].ToString());
-                        //double avgBuyPrice = double.Parse(obj["avg_buy_price"].ToString());
-                        //bool avgBuyPriceModified = bool.Parse(obj["avg_buy_price_modified"].ToString());
+                    m_lastErrorMessage = responseObj["retMsg"]?.ToString() ?? "Unknown error";
+                    return (false, currencies);
+                }
 
-                        Currency currency = new Currency(currencyCode, balance, locked, 0, false);
-                        currencies.Add(currency);
-                    }
-                    bResult = true;
-                }
-                else
+                var list = responseObj["result"]?["list"] as JArray;
+                if (list == null || list.Count == 0)
+                    return (true, currencies);
+
+                var coinList = list[0]["coin"] as JArray;
+                if (coinList == null)
+                    return (true, currencies);
+
+                foreach (JToken item in coinList)
                 {
-                    bResult = false;
-                    m_lastErrorMessage = responseObj["retMsg"].ToString();
+                    string currencyCode = item["coin"]?.ToString() ?? "";
+                    if (string.IsNullOrEmpty(currencyCode)) continue;
+                    double balance = double.TryParse(item["walletBalance"]?.ToString(), out double wb) ? wb : 0;
+                    double locked = double.TryParse(item["locked"]?.ToString(), out double lk) ? lk : 0;
+                    currencies.Add(new Currency(currencyCode, balance, locked, 0, false));
                 }
+                bResult = true;
                 return (bResult, currencies);
-
             }
             catch (Exception ex)
             {
                 m_lastErrorMessage = ex.Message;
             }
-
             return (bResult, currencies);
-
         }
 
+        /// <summary>v3 스타일(쿼리 서명) - v5에서는 사용하지 않음.</summary>
         private string CreateSignature(string queryString, string secretKey)
         {
             using (var hmac = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(secretKey)))
             {
                 byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(queryString));
+                return BitConverter.ToString(hash).Replace("-", "").ToLower();
+            }
+        }
+
+        /// <summary>v5 GET 서명: timestamp + api_key + recv_window + queryString (쿼리에는 인증 파라미터 제외)</summary>
+        private string CreateSignatureV5Get(long timestamp, string apiKey, string recvWindow, string queryString, string secretKey)
+        {
+            string signPayload = timestamp + apiKey + recvWindow + queryString;
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secretKey)))
+            {
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(signPayload));
                 return BitConverter.ToString(hash).Replace("-", "").ToLower();
             }
         }
@@ -107,28 +160,20 @@ namespace ExchangeAPIController
                 string secretKey = ApikeySetting.GetInstance().GetExchangeSecretKey(m_exchange);
 
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-                Dictionary<string, string> parameters = new Dictionary<string, string>
-        {
-            { "timestamp", timestamp.ToString() },
-            { "api_key", accessKey },
-            { "coin", coinName }
-        };
-
-                string queryString = string.Join("&", parameters.OrderBy(x => x.Key)
-                                  .Select(x => $"{x.Key}={x.Value}"));
-
-                string signature = CreateSignature(queryString, secretKey);
-                parameters.Add("sign", signature);
+                const string recvWindow = "5000";
+                // v5 GET: 쿼리에는 요청 파라미터만 (coin), 서명은 timestamp+api_key+recv_window+queryString
+                string queryString = string.IsNullOrEmpty(coinName) ? "" : $"coin={coinName}";
+                string signature = CreateSignatureV5Get(timestamp, accessKey, recvWindow, queryString, secretKey);
 
                 var client = new RestClient(BASE_URL);
                 var request = new RestRequest("/v5/asset/coin/query-info", Method.Get);
+                if (!string.IsNullOrEmpty(coinName))
+                    request.AddQueryParameter("coin", coinName);
 
-                foreach (var param in parameters)
-                {
-                    request.AddQueryParameter(param.Key, param.Value);
-                }
-
+                request.AddHeader("X-BAPI-API-KEY", accessKey);
+                request.AddHeader("X-BAPI-SIGN", signature);
+                request.AddHeader("X-BAPI-TIMESTAMP", timestamp.ToString());
+                request.AddHeader("X-BAPI-RECV-WINDOW", recvWindow);
                 request.AddHeader("Accept", "application/json");
                 RestResponse response = client.Execute(request);
 
@@ -378,6 +423,12 @@ namespace ExchangeAPIController
             return (bResult, errorMessage);
         }
 
+        /// <summary>바이비트: 일부 지역/사용자에게 beneficiary(VASP) 정보 필요. 출금 시 입력.</summary>
+        public override Task<(bool required, string info)> CheckTravelRuleRequiredAsync()
+        {
+            return Task.FromResult((true, "일부 지역: beneficiary(VASP) 정보 필요. 출금 시 입력."));
+        }
+
         public override (bool, List<string>) GetMarketCoinsAndPairs()
         {
             throw new NotImplementedException();
@@ -433,33 +484,17 @@ namespace ExchangeAPIController
                 string accessKey = ApikeySetting.GetInstance().GetExchangeAccessKey(m_exchange);
                 string secretKey = ApikeySetting.GetInstance().GetExchangeSecretKey(m_exchange);
 
-                // 타임스탬프 생성
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                
-                // 파라미터 설정
-                Dictionary<string, string> parameters = new Dictionary<string, string>
-                {
-                    { "timestamp", timestamp.ToString() },
-                    { "api_key", accessKey }
-                };
-
-                // 파라미터 정렬 및 쿼리 문자열 생성
-                string queryString = string.Join("&", parameters.OrderBy(x => x.Key)
-                          .Select(x => $"{x.Key}={x.Value}"));
-                
-                // 서명 생성
-                string signature = CreateSignature(queryString, secretKey);
-                parameters.Add("sign", signature);
+                const string recvWindow = "5000";
+                string queryString = ""; // v5 GET 파라미터 없음
+                string signature = CreateSignatureV5Get(timestamp, accessKey, recvWindow, queryString, secretKey);
 
                 var client = new RestClient(BASE_URL);
                 var request = new RestRequest("/v5/asset/withdraw/vasp/list", Method.Get);
-                
-                // 파라미터 추가
-                foreach (var param in parameters)
-                {
-                    request.AddQueryParameter(param.Key, param.Value);
-                }
-
+                request.AddHeader("X-BAPI-API-KEY", accessKey);
+                request.AddHeader("X-BAPI-SIGN", signature);
+                request.AddHeader("X-BAPI-TIMESTAMP", timestamp.ToString());
+                request.AddHeader("X-BAPI-RECV-WINDOW", recvWindow);
                 request.AddHeader("Accept", "application/json");
                 RestResponse response = await client.ExecuteAsync(request);
                 

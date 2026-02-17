@@ -11,6 +11,8 @@
     <StartupObject>CoinTransfer.Program</StartupObject>
     <RootNamespace>CoinTransfer</RootNamespace>
     <AssemblyName>CoinTransfer</AssemblyName>
+    <!-- WinForms는 Windows 전용. CA1416(플랫폼 호환성) 경고 비표시 -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

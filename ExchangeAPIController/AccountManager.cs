@@ -40,25 +40,36 @@ namespace ExchangeAPIController
             {
                 case EnumExchange.Debug:
                     return m_accountDebug;
-                case EnumExchange.Bybit:
-                    return m_accountBybit;
-                case EnumExchange.MEXC:
-                    return m_accountMexc;
                 case EnumExchange.Binance:
                     return m_accountBinance;
+                case EnumExchange.Upbit:
+                    return m_accountUpbit;
+                case EnumExchange.Bithumb:
+                    return m_accountBithumb;
+                case EnumExchange.Gate:
+                    return m_accountGate;
+                case EnumExchange.Bybit:
+                    return m_accountBybit;
+                case EnumExchange.OKX:
+                    return m_accountOKX;
+                case EnumExchange.MEXC:
+                    return m_accountMexc;
+                case EnumExchange.Bitget:
+                    return m_accountBitget;
                 default:
                     return m_accountDebug;
             }
-
         }
 
         private Account m_accountDebug = new Account(EnumExchange.Debug);
-
-        private Account m_accountBybit = new Account(EnumExchange.Bybit);
-
-        private Account m_accountMexc = new Account(EnumExchange.MEXC);
-
         private Account m_accountBinance = new Account(EnumExchange.Binance);
+        private Account m_accountUpbit = new Account(EnumExchange.Upbit);
+        private Account m_accountBithumb = new Account(EnumExchange.Bithumb);
+        private Account m_accountGate = new Account(EnumExchange.Gate);
+        private Account m_accountBybit = new Account(EnumExchange.Bybit);
+        private Account m_accountOKX = new Account(EnumExchange.OKX);
+        private Account m_accountMexc = new Account(EnumExchange.MEXC);
+        private Account m_accountBitget = new Account(EnumExchange.Bitget);
     }
 
     public class Account

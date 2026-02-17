@@ -29,27 +29,30 @@ namespace ExchangeAPIController
                 case EnumExchange.Debug:
                     controller = new ExchangeAPIControllerDebug();
                     break;
+                case EnumExchange.Binance:
+                    controller = new ExchangeAPIControllerBinance();
+                    break;
+                case EnumExchange.Upbit:
+                    controller = new ExchangeAPIControllerUpbit();
+                    break;
+                case EnumExchange.Bithumb:
+                    controller = new ExchangeAPIControllerBithumb();
+                    break;
+                case EnumExchange.Gate:
+                    controller = new ExchangeAPIControllerGate();
+                    break;
                 case EnumExchange.Bybit:
                     controller = new ExchangeAPIControllerBybit();
+                    break;
+                case EnumExchange.OKX:
+                    controller = new ExchangeAPIControllerOKX();
                     break;
                 case EnumExchange.MEXC:
                     controller = new ExchangeAPIControllerMexc();
                     break;
-                case EnumExchange.Binance:
-                    controller = new ExchangeAPIControllerBinance();
+                case EnumExchange.Bitget:
+                    controller = new ExchangeAPIControllerBitget();
                     break;
-                    //case EnumExchange.Bithumb:
-                    //    controller = new ExchangeAPIControllerBithumb();
-                    //    break;
-                    //case EnumExchange.Huobi:
-                    //    controller = new ExchangeAPIControllerHuobi();
-                    //    break;
-                    //case EnumExchange.Binance:
-                    //    controller = new ExchangeAPIControllerBinance();
-                    //    break;
-                    //case EnumExchange.Coinone:
-                    //    controller = new ExchangeAPIControllerCoinone();
-                    //    break;
             }
 
             return controller;

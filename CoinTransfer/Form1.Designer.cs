@@ -18,11 +18,15 @@ namespace CoinTransfer
         private void InitializeComponent()
         {
             grpApiSetting = new GroupBox();
+            cmbExchange = new ComboBox();
+            lblExchange = new Label();
             btnImportApiKey = new Button();
             btnExportApiKey = new Button();
             btnSaveApiKey = new Button();
             txtBinanceSecretKey = new TextBox();
             txtBinanceAccessKey = new TextBox();
+            lblPassphrase = new Label();
+            txtPassphrase = new TextBox();
             lblSecretKey = new Label();
             lblAccessKey = new Label();
             chkReservedWithdraw = new CheckBox();
@@ -36,6 +40,7 @@ namespace CoinTransfer
             lblAddressName = new Label();
             txtAddressName = new TextBox();
             btnSaveAddress = new Button();
+            btnRemoveAddress = new Button();
             btnSimpleBalance = new Button();
             lblSimpleBalance = new Label();
             grpWithdraw = new GroupBox();
@@ -50,7 +55,8 @@ namespace CoinTransfer
             lblAddress = new Label();
             txtAmount = new TextBox();
             lblAmount = new Label();
-            txtNetwork = new TextBox();
+            btnCheckChain = new Button();
+            cmbNetwork = new ComboBox();
             lblNetwork = new Label();
             txtCoin = new TextBox();
             lblCoin = new Label();
@@ -63,27 +69,50 @@ namespace CoinTransfer
             // 
             // grpApiSetting
             // 
+            grpApiSetting.Controls.Add(cmbExchange);
+            grpApiSetting.Controls.Add(lblExchange);
             grpApiSetting.Controls.Add(btnImportApiKey);
             grpApiSetting.Controls.Add(btnExportApiKey);
             grpApiSetting.Controls.Add(btnSaveApiKey);
             grpApiSetting.Controls.Add(txtBinanceSecretKey);
             grpApiSetting.Controls.Add(txtBinanceAccessKey);
+            grpApiSetting.Controls.Add(lblPassphrase);
+            grpApiSetting.Controls.Add(txtPassphrase);
             grpApiSetting.Controls.Add(lblSecretKey);
             grpApiSetting.Controls.Add(lblAccessKey);
             grpApiSetting.Location = new Point(12, 15);
             grpApiSetting.Margin = new Padding(3, 4, 3, 4);
             grpApiSetting.Name = "grpApiSetting";
             grpApiSetting.Padding = new Padding(3, 4, 3, 4);
-            grpApiSetting.Size = new Size(564, 135);
+            grpApiSetting.Size = new Size(564, 165);
             grpApiSetting.TabIndex = 0;
             grpApiSetting.TabStop = false;
-            grpApiSetting.Text = "Binance API 설정";
+            grpApiSetting.Text = "API 설정";
+            // 
+            // cmbExchange
+            // 
+            cmbExchange.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbExchange.FormattingEnabled = true;
+            cmbExchange.Location = new Point(100, 28);
+            cmbExchange.Name = "cmbExchange";
+            cmbExchange.Size = new Size(150, 23);
+            cmbExchange.TabIndex = 0;
+            cmbExchange.SelectedIndexChanged += CmbExchange_SelectedIndexChanged;
+            // 
+            // lblExchange
+            // 
+            lblExchange.AutoSize = true;
+            lblExchange.Location = new Point(15, 32);
+            lblExchange.Name = "lblExchange";
+            lblExchange.Size = new Size(43, 15);
+            lblExchange.TabIndex = 7;
+            lblExchange.Text = "거래소";
             // 
             // btnImportApiKey
             // 
-            btnImportApiKey.Location = new Point(456, 61);
+            btnImportApiKey.Location = new Point(444, 56);
             btnImportApiKey.Name = "btnImportApiKey";
-            btnImportApiKey.Size = new Size(90, 28);
+            btnImportApiKey.Size = new Size(102, 28);
             btnImportApiKey.TabIndex = 6;
             btnImportApiKey.Text = "파일 가져오기";
             btnImportApiKey.UseVisualStyleBackColor = true;
@@ -91,9 +120,9 @@ namespace CoinTransfer
             // 
             // btnExportApiKey
             // 
-            btnExportApiKey.Location = new Point(456, 28);
+            btnExportApiKey.Location = new Point(444, 23);
             btnExportApiKey.Name = "btnExportApiKey";
-            btnExportApiKey.Size = new Size(90, 28);
+            btnExportApiKey.Size = new Size(102, 28);
             btnExportApiKey.TabIndex = 5;
             btnExportApiKey.Text = "파일 내보내기";
             btnExportApiKey.UseVisualStyleBackColor = true;
@@ -101,10 +130,10 @@ namespace CoinTransfer
             // 
             // btnSaveApiKey
             // 
-            btnSaveApiKey.Location = new Point(456, 94);
+            btnSaveApiKey.Location = new Point(445, 88);
             btnSaveApiKey.Margin = new Padding(3, 4, 3, 4);
             btnSaveApiKey.Name = "btnSaveApiKey";
-            btnSaveApiKey.Size = new Size(90, 28);
+            btnSaveApiKey.Size = new Size(101, 28);
             btnSaveApiKey.TabIndex = 4;
             btnSaveApiKey.Text = "저장";
             btnSaveApiKey.UseVisualStyleBackColor = true;
@@ -112,25 +141,44 @@ namespace CoinTransfer
             // 
             // txtBinanceSecretKey
             // 
-            txtBinanceSecretKey.Location = new Point(100, 65);
+            txtBinanceSecretKey.Location = new Point(100, 88);
             txtBinanceSecretKey.Margin = new Padding(3, 4, 3, 4);
             txtBinanceSecretKey.Name = "txtBinanceSecretKey";
             txtBinanceSecretKey.PasswordChar = '*';
-            txtBinanceSecretKey.Size = new Size(350, 23);
+            txtBinanceSecretKey.Size = new Size(339, 23);
             txtBinanceSecretKey.TabIndex = 3;
+            // 
+            // lblPassphrase
+            // 
+            lblPassphrase.AutoSize = true;
+            lblPassphrase.Location = new Point(15, 122);
+            lblPassphrase.Name = "lblPassphrase";
+            lblPassphrase.Size = new Size(72, 15);
+            lblPassphrase.TabIndex = 8;
+            lblPassphrase.Text = "Passphrase";
+            // 
+            // txtPassphrase
+            // 
+            txtPassphrase.Location = new Point(100, 118);
+            txtPassphrase.Margin = new Padding(3, 4, 3, 4);
+            txtPassphrase.Name = "txtPassphrase";
+            txtPassphrase.PasswordChar = '*';
+            txtPassphrase.PlaceholderText = "Bitget, OKX 등 필요 시 입력";
+            txtPassphrase.Size = new Size(339, 23);
+            txtPassphrase.TabIndex = 4;
             // 
             // txtBinanceAccessKey
             // 
-            txtBinanceAccessKey.Location = new Point(100, 28);
+            txtBinanceAccessKey.Location = new Point(100, 58);
             txtBinanceAccessKey.Margin = new Padding(3, 4, 3, 4);
             txtBinanceAccessKey.Name = "txtBinanceAccessKey";
-            txtBinanceAccessKey.Size = new Size(350, 23);
+            txtBinanceAccessKey.Size = new Size(339, 23);
             txtBinanceAccessKey.TabIndex = 2;
             // 
             // lblSecretKey
             // 
             lblSecretKey.AutoSize = true;
-            lblSecretKey.Location = new Point(15, 69);
+            lblSecretKey.Location = new Point(15, 92);
             lblSecretKey.Name = "lblSecretKey";
             lblSecretKey.Size = new Size(63, 15);
             lblSecretKey.TabIndex = 1;
@@ -139,7 +187,7 @@ namespace CoinTransfer
             // lblAccessKey
             // 
             lblAccessKey.AutoSize = true;
-            lblAccessKey.Location = new Point(15, 31);
+            lblAccessKey.Location = new Point(15, 62);
             lblAccessKey.Name = "lblAccessKey";
             lblAccessKey.Size = new Size(66, 15);
             lblAccessKey.TabIndex = 0;
@@ -255,6 +303,16 @@ namespace CoinTransfer
             btnSaveAddress.UseVisualStyleBackColor = true;
             btnSaveAddress.Click += BtnSaveAddress_Click;
             // 
+            // btnRemoveAddress
+            // 
+            btnRemoveAddress.Location = new Point(478, 132);
+            btnRemoveAddress.Name = "btnRemoveAddress";
+            btnRemoveAddress.Size = new Size(75, 27);
+            btnRemoveAddress.TabIndex = 32;
+            btnRemoveAddress.Text = "주소 삭제";
+            btnRemoveAddress.UseVisualStyleBackColor = true;
+            btnRemoveAddress.Click += BtnRemoveAddress_Click;
+            // 
             // btnSimpleBalance
             // 
             btnSimpleBalance.Location = new Point(169, 345);
@@ -290,6 +348,7 @@ namespace CoinTransfer
             grpWithdraw.Controls.Add(btnCheckTravelRule);
             grpWithdraw.Controls.Add(txtTag);
             grpWithdraw.Controls.Add(lblTag);
+            grpWithdraw.Controls.Add(btnRemoveAddress);
             grpWithdraw.Controls.Add(btnSaveAddress);
             grpWithdraw.Controls.Add(txtAddressName);
             grpWithdraw.Controls.Add(lblAddressName);
@@ -299,21 +358,22 @@ namespace CoinTransfer
             grpWithdraw.Controls.Add(lblAddress);
             grpWithdraw.Controls.Add(txtAmount);
             grpWithdraw.Controls.Add(lblAmount);
-            grpWithdraw.Controls.Add(txtNetwork);
+            grpWithdraw.Controls.Add(btnCheckChain);
+            grpWithdraw.Controls.Add(cmbNetwork);
             grpWithdraw.Controls.Add(lblNetwork);
             grpWithdraw.Controls.Add(txtCoin);
             grpWithdraw.Controls.Add(lblCoin);
             grpWithdraw.Controls.Add(lblSimpleBalance);
             grpWithdraw.Controls.Add(btnSimpleBalance);
             grpWithdraw.Controls.Add(btnRefreshBalance);
-            grpWithdraw.Location = new Point(12, 158);
+            grpWithdraw.Location = new Point(12, 188);
             grpWithdraw.Margin = new Padding(3, 4, 3, 4);
             grpWithdraw.Name = "grpWithdraw";
             grpWithdraw.Padding = new Padding(3, 4, 3, 4);
             grpWithdraw.Size = new Size(564, 386);
             grpWithdraw.TabIndex = 1;
             grpWithdraw.TabStop = false;
-            grpWithdraw.Text = "Binance 출금";
+            grpWithdraw.Text = "출금";
             // 
             // btnWithdraw
             // 
@@ -336,7 +396,7 @@ namespace CoinTransfer
             txtQuestionnaire.Name = "txtQuestionnaire";
             txtQuestionnaire.PlaceholderText = "필요한 경우에만 입력 (예: {\"country\":\"AE\", ...})";
             txtQuestionnaire.ScrollBars = ScrollBars.Vertical;
-            txtQuestionnaire.Size = new Size(505, 35);
+            txtQuestionnaire.Size = new Size(531, 35);
             txtQuestionnaire.TabIndex = 18;
             // 
             // lblQuestionnaire
@@ -360,9 +420,9 @@ namespace CoinTransfer
             // 
             // btnCheckTravelRule
             // 
-            btnCheckTravelRule.Location = new Point(326, 169);
+            btnCheckTravelRule.Location = new Point(348, 169);
             btnCheckTravelRule.Name = "btnCheckTravelRule";
-            btnCheckTravelRule.Size = new Size(120, 28);
+            btnCheckTravelRule.Size = new Size(102, 28);
             btnCheckTravelRule.TabIndex = 15;
             btnCheckTravelRule.Text = "Travel Rule 확인";
             btnCheckTravelRule.UseVisualStyleBackColor = true;
@@ -373,7 +433,7 @@ namespace CoinTransfer
             txtTag.Location = new Point(120, 172);
             txtTag.Margin = new Padding(3, 4, 3, 4);
             txtTag.Name = "txtTag";
-            txtTag.Size = new Size(200, 23);
+            txtTag.Size = new Size(220, 23);
             txtTag.TabIndex = 11;
             // 
             // lblTag
@@ -390,7 +450,7 @@ namespace CoinTransfer
             txtAddress.Location = new Point(120, 135);
             txtAddress.Margin = new Padding(3, 4, 3, 4);
             txtAddress.Name = "txtAddress";
-            txtAddress.Size = new Size(400, 23);
+            txtAddress.Size = new Size(352, 23);
             txtAddress.TabIndex = 9;
             // 
             // lblAddress
@@ -419,13 +479,24 @@ namespace CoinTransfer
             lblAmount.TabIndex = 6;
             lblAmount.Text = "수량";
             // 
-            // txtNetwork
+            // btnCheckChain
             // 
-            txtNetwork.Location = new Point(120, 68);
-            txtNetwork.Margin = new Padding(3, 4, 3, 4);
-            txtNetwork.Name = "txtNetwork";
-            txtNetwork.Size = new Size(200, 23);
-            txtNetwork.TabIndex = 5;
+            btnCheckChain.Location = new Point(348, 66);
+            btnCheckChain.Name = "btnCheckChain";
+            btnCheckChain.Size = new Size(100, 28);
+            btnCheckChain.TabIndex = 20;
+            btnCheckChain.Text = "체인 조회";
+            btnCheckChain.UseVisualStyleBackColor = true;
+            btnCheckChain.Click += BtnCheckChain_Click;
+            // 
+            // cmbNetwork
+            // 
+            cmbNetwork.DropDownStyle = ComboBoxStyle.DropDown;
+            cmbNetwork.Location = new Point(120, 68);
+            cmbNetwork.Margin = new Padding(3, 4, 3, 4);
+            cmbNetwork.Name = "cmbNetwork";
+            cmbNetwork.Size = new Size(220, 23);
+            cmbNetwork.TabIndex = 5;
             // 
             // lblNetwork
             // 
@@ -441,7 +512,7 @@ namespace CoinTransfer
             txtCoin.Location = new Point(120, 31);
             txtCoin.Margin = new Padding(3, 4, 3, 4);
             txtCoin.Name = "txtCoin";
-            txtCoin.Size = new Size(200, 23);
+            txtCoin.Size = new Size(220, 23);
             txtCoin.TabIndex = 3;
             // 
             // lblCoin
@@ -467,27 +538,27 @@ namespace CoinTransfer
             // txtLog
             // 
             txtLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtLog.Location = new Point(12, 552);
+            txtLog.Location = new Point(12, 582);
             txtLog.Margin = new Padding(3, 4, 3, 4);
             txtLog.Multiline = true;
             txtLog.Name = "txtLog";
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
-            txtLog.Size = new Size(564, 153);
+            txtLog.Size = new Size(564, 136);
             txtLog.TabIndex = 2;
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(588, 718);
+            ClientSize = new Size(588, 748);
             Controls.Add(txtLog);
             Controls.Add(grpWithdraw);
             Controls.Add(grpApiSetting);
             Margin = new Padding(3, 4, 3, 4);
             MinimumSize = new Size(600, 553);
             Name = "Form1";
-            Text = "CoinTransfer - Binance 출금 봇";
+            Text = "CoinTransfer - 출금 봇";
             FormClosing += Form1_FormClosing;
             Load += Form1_Load;
             grpApiSetting.ResumeLayout(false);
@@ -502,9 +573,13 @@ namespace CoinTransfer
         #endregion
 
         private System.Windows.Forms.GroupBox grpApiSetting;
+        private System.Windows.Forms.ComboBox cmbExchange;
+        private System.Windows.Forms.Label lblExchange;
         private System.Windows.Forms.Button btnSaveApiKey;
         private System.Windows.Forms.TextBox txtBinanceSecretKey;
         private System.Windows.Forms.TextBox txtBinanceAccessKey;
+        private System.Windows.Forms.Label lblPassphrase;
+        private System.Windows.Forms.TextBox txtPassphrase;
         private System.Windows.Forms.Label lblSecretKey;
         private System.Windows.Forms.Label lblAccessKey;
         private System.Windows.Forms.Button btnExportApiKey;
@@ -512,7 +587,7 @@ namespace CoinTransfer
         private System.Windows.Forms.GroupBox grpWithdraw;
         private System.Windows.Forms.TextBox txtCoin;
         private System.Windows.Forms.Label lblCoin;
-        private System.Windows.Forms.TextBox txtNetwork;
+        private System.Windows.Forms.ComboBox cmbNetwork;
         private System.Windows.Forms.Label lblNetwork;
         private System.Windows.Forms.TextBox txtAmount;
         private System.Windows.Forms.Label lblAmount;
@@ -538,7 +613,9 @@ namespace CoinTransfer
         private System.Windows.Forms.Label lblAddressName;
         private System.Windows.Forms.TextBox txtAddressName;
         private System.Windows.Forms.Button btnSaveAddress;
+        private System.Windows.Forms.Button btnRemoveAddress;
         private System.Windows.Forms.Button btnSimpleBalance;
         private System.Windows.Forms.Label lblSimpleBalance;
+        private System.Windows.Forms.Button btnCheckChain;
     }
 }

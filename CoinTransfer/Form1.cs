@@ -28,12 +28,48 @@ namespace CoinTransfer
 
             ApikeySetting.GetInstance().LoadSetting();
 
-            txtBinanceAccessKey.Text = ApikeySetting.GetInstance().GetExchangeAccessKey(EnumExchange.Binance);
-            txtBinanceSecretKey.Text = ApikeySetting.GetInstance().GetExchangeSecretKey(EnumExchange.Binance);
+            cmbExchange.BeginUpdate();
+            cmbExchange.Items.Clear();
+            foreach (EnumExchange ex in Enum.GetValues(typeof(EnumExchange)))
+            {
+                if (ex == EnumExchange.Debug) continue;
+                cmbExchange.Items.Add(ex);
+            }
+            cmbExchange.EndUpdate();
+            if (cmbExchange.Items.Count > 0)
+                cmbExchange.SelectedIndex = 0;
 
+            LoadApiKeysForSelectedExchange();
+            UpdateGroupTitleForExchange();
             LoadSavedAddresses();
 
-            AppendLog("프로그램 시작. Binance API 키를 입력하고 저장 후 잔고를 새로고침하세요.");
+            AppendLog("프로그램 시작. 거래소를 선택하고 API 키를 입력한 뒤 저장 후 잔고를 새로고침하세요.");
+        }
+
+        private EnumExchange GetSelectedExchange()
+        {
+            if (cmbExchange?.SelectedItem is EnumExchange ex)
+                return ex;60
+            return EnumExchange.Binance;
+        }
+
+        private void LoadApiKeysForSelectedExchange()
+        {
+            var exchange = GetSelectedExchange();
+            txtBinanceAccessKey.Text = ApikeySetting.GetInstance().GetExchangeAccessKey(exchange);
+            txtBinanceSecretKey.Text = ApikeySetting.GetInstance().GetExchangeSecretKey(exchange);
+            txtPassphrase.Text = ApikeySetting.GetInstance().GetExchangePassphrase(exchange);
+        }
+
+        private void UpdateGroupTitleForExchange()
+        {
+            grpApiSetting.Text = $"{GetSelectedExchange()} API 설정";
+        }
+
+        private void CmbExchange_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            LoadApiKeysForSelectedExchange();
+            UpdateGroupTitleForExchange();
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
@@ -43,10 +79,12 @@ namespace CoinTransfer
 
         private void BtnSaveApiKey_Click(object sender, EventArgs e)
         {
-            ApikeySetting.GetInstance().SetExchangeAccessKey(EnumExchange.Binance, txtBinanceAccessKey.Text.Trim());
-            ApikeySetting.GetInstance().SetExchangeSecretKey(EnumExchange.Binance, txtBinanceSecretKey.Text.Trim());
+            var exchange = GetSelectedExchange();
+            ApikeySetting.GetInstance().SetExchangeAccessKey(exchange, txtBinanceAccessKey.Text.Trim());
+            ApikeySetting.GetInstance().SetExchangeSecretKey(exchange, txtBinanceSecretKey.Text.Trim());
+            ApikeySetting.GetInstance().SetExchangePassphrase(exchange, txtPassphrase.Text.Trim());
             ApikeySetting.GetInstance().SaveSetting();
-            AppendLog("Binance API 키가 저장되었습니다.");
+            AppendLog($"{exchange} API 키가 저장되었습니다.");
         }
 
         private void BtnExportApiKey_Click(object sender, EventArgs e)
@@ -61,10 +99,12 @@ namespace CoinTransfer
 
             try
             {
-                var data = new
+                var exchange = GetSelectedExchange();
+                var data = new Dictionary<string, object>
                 {
-                    Binance = new { AccessKey = txtBinanceAccessKey.Text.Trim(), SecretKey = txtBinanceSecretKey.Text.Trim() },
-                    ExportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    { "Exchange", exchange.ToString() },
+                    { exchange.ToString(), new { AccessKey = txtBinanceAccessKey.Text.Trim(), SecretKey = txtBinanceSecretKey.Text.Trim(), Passphrase = txtPassphrase.Text.Trim() } },
+                    { "ExportedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") }
                 };
                 File.WriteAllText(dlg.FileName, JsonConvert.SerializeObject(data, Formatting.Indented));
                 AppendLog($"API 키가 저장되었습니다: {dlg.FileName}");
@@ -89,11 +129,28 @@ namespace CoinTransfer
             try
             {
                 var json = File.ReadAllText(dlg.FileName);
-                var data = JsonConvert.DeserializeObject<dynamic>(json);
-                if (data?.Binance != null)
+                var jobj = Newtonsoft.Json.Linq.JObject.Parse(json);
+                string accessKey = "";
+                string secretKey = "";
+                string passphrase = "";
+                if (jobj["Binance"] is Newtonsoft.Json.Linq.JObject binance)
                 {
-                    txtBinanceAccessKey.Text = (string)data.Binance.AccessKey ?? "";
-                    txtBinanceSecretKey.Text = (string)data.Binance.SecretKey ?? "";
+                    accessKey = binance["AccessKey"]?.ToString() ?? "";
+                    secretKey = binance["SecretKey"]?.ToString() ?? "";
+                    passphrase = binance["Passphrase"]?.ToString() ?? "";
+                }
+                string exchangeInFile = jobj["Exchange"]?.ToString();
+                if (!string.IsNullOrEmpty(exchangeInFile) && jobj[exchangeInFile] is Newtonsoft.Json.Linq.JObject exObj)
+                {
+                    accessKey = exObj["AccessKey"]?.ToString() ?? "";
+                    secretKey = exObj["SecretKey"]?.ToString() ?? "";
+                    passphrase = exObj["Passphrase"]?.ToString() ?? "";
+                }
+                if (!string.IsNullOrEmpty(accessKey) || !string.IsNullOrEmpty(secretKey))
+                {
+                    txtBinanceAccessKey.Text = accessKey;
+                    txtBinanceSecretKey.Text = secretKey;
+                    txtPassphrase.Text = passphrase;
                     AppendLog($"API 키를 불러왔습니다: {dlg.FileName}");
                     MessageBox.Show("API 키 가져오기가 완료되었습니다. '저장' 버튼을 눌러 config.ini에 반영하세요.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -158,6 +215,39 @@ namespace CoinTransfer
             }
         }
 
+        private void BtnRemoveAddress_Click(object sender, EventArgs e)
+        {
+            if (cmbSavedAddresses.SelectedItem is not AddressStorage.SavedAddress addr)
+            {
+                MessageBox.Show("삭제할 주소를 콤보박스에서 선택하세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var key = addr.Key;
+            if (string.IsNullOrEmpty(key))
+            {
+                MessageBox.Show("선택한 항목에 저장 이름이 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var result = MessageBox.Show($"저장된 주소 \"{key}\"을(를) 삭제하시겠습니까?", "주소 삭제 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result != DialogResult.Yes) return;
+            try
+            {
+                AddressStorage.Remove(key);
+                LoadSavedAddresses();
+                if (txtAddress.Text == addr.Address && (string.IsNullOrEmpty(addr.Tag) || txtTag.Text == addr.Tag))
+                {
+                    txtAddress.Clear();
+                    txtTag.Clear();
+                }
+                AppendLog($"주소 삭제됨: [{key}]");
+                MessageBox.Show("선택한 주소가 삭제되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"삭제 실패: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private string GetCoinText() => txtCoin.Text?.Trim() ?? "";
 
         private void UpdateBalanceDisplay()
@@ -176,33 +266,74 @@ namespace CoinTransfer
 
         private async void BtnCheckTravelRule_Click(object sender, EventArgs e)
         {
-            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(EnumExchange.Binance);
-            if (controller is not ExchangeAPIControllerBinance binance)
-            {
-                lblTravelRuleStatus.Text = "Travel Rule: 해당 없음";
-                return;
-            }
-
+            var exchange = GetSelectedExchange();
+            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(exchange);
             lblTravelRuleStatus.Text = "Travel Rule: 확인 중...";
+            lblTravelRuleStatus.ForeColor = Color.Gray;
+            AppendLog($"[Travel Rule] {exchange} 확인 중...");
             try
             {
-                var (required, info) = await binance.CheckTravelRuleRequiredAsync();
-                if (required)
+                var (required, info) = await controller.CheckTravelRuleRequiredAsync();
+                AppendLog($"[Travel Rule] 결과: required={required}, info=\"{info}\"");
+                if (!string.IsNullOrEmpty(info) && !required)
+                {
+                    lblTravelRuleStatus.Text = $"Travel Rule: 해당 없음 ({info})";
+                    lblTravelRuleStatus.ForeColor = Color.Gray;
+                }
+                else if (required)
                 {
                     lblTravelRuleStatus.Text = $"Travel Rule: 필요 ({info})";
                     lblTravelRuleStatus.ForeColor = Color.DarkOrange;
-                    AppendLog($"Travel Rule 필요 - {info}. Questionnaire JSON을 입력해 주세요.");
+                    AppendLog($"Travel Rule 필요 - {info}. Questionnaire(또는 수취인 정보) 입력 후 출금 가능.");
                 }
                 else
                 {
                     lblTravelRuleStatus.Text = "Travel Rule: 불필요";
                     lblTravelRuleStatus.ForeColor = Color.Green;
+                    AppendLog("[Travel Rule] 해당 거래소 기준 불필요.");
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 lblTravelRuleStatus.Text = "Travel Rule: 확인 실패";
                 lblTravelRuleStatus.ForeColor = Color.Gray;
+                AppendLog($"[Travel Rule] 확인 실패: {ex.Message}");
+            }
+        }
+
+        private void BtnCheckChain_Click(object sender, EventArgs e)
+        {
+            var coin = GetCoinText();
+            if (string.IsNullOrEmpty(coin))
+            {
+                MessageBox.Show("코인을 먼저 입력하세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(GetSelectedExchange());
+            var (ok, networks) = controller.GetCoinNetworksDetail(coin);
+            if (ok && networks != null && networks.Count > 0)
+            {
+                cmbNetwork.Items.Clear();
+                string firstWithdrawChain = null;
+                foreach (var n in networks)
+                {
+                    cmbNetwork.Items.Add(n.ChainName);
+                    if (n.WithdrawEnabled && firstWithdrawChain == null)
+                        firstWithdrawChain = n.ChainName;
+                }
+                if (!string.IsNullOrEmpty(firstWithdrawChain))
+                    cmbNetwork.Text = firstWithdrawChain;
+                else
+                    cmbNetwork.SelectedIndex = 0;
+                AppendLog($"[체인 조회] {coin}: {networks.Count}개 - {string.Join(", ", networks.Select(x => x.ChainName))}");
+                MessageBox.Show($"[{coin}] 체인 목록을 불러왔습니다. 드롭다운에서 선택하거나 직접 입력하세요.", "체인 조회", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                string err = controller.GetLastErrorMessage();
+                if (string.IsNullOrEmpty(err)) err = "지원하지 않거나 조회 실패";
+                AppendLog($"[체인 조회] {coin} 실패: {err}");
+                MessageBox.Show($"체인 조회 실패: {err}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -218,7 +349,7 @@ namespace CoinTransfer
             lblSimpleBalance.Text = "조회 중...";
             lblSimpleBalance.ForeColor = Color.Gray;
 
-            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(EnumExchange.Binance);
+            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(GetSelectedExchange());
             var (ok, currencies) = await controller.GetCoinHoldingForMyAccount();
 
             if (ok && currencies != null)
@@ -248,9 +379,9 @@ namespace CoinTransfer
             m_isRefreshing = true;
             btnRefreshBalance.Enabled = false;
 
-            AppendLog("Binance 잔고 조회 중...");
+            AppendLog($"{GetSelectedExchange()} 잔고 조회 중...");
 
-            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(EnumExchange.Binance);
+            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(GetSelectedExchange());
             var (ok, currencies) = await controller.GetCoinHoldingForMyAccount();
 
             if (ok && currencies != null)
@@ -274,7 +405,7 @@ namespace CoinTransfer
             if (m_isWithdrawing) return;
 
             var coin = GetCoinText();
-            var networkStr = txtNetwork.Text?.Trim() ?? "";
+            var networkStr = cmbNetwork.Text?.Trim() ?? "";
             var amountStr = txtAmount.Text.Trim();
             var address = txtAddress.Text.Trim();
 
@@ -301,6 +432,7 @@ namespace CoinTransfer
 
             var chainName = networkStr.Trim();
             var tag = string.IsNullOrWhiteSpace(txtTag.Text) ? null : txtTag.Text.Trim();
+            var questionnaire = txtQuestionnaire.Text?.Trim();
 
             var result = MessageBox.Show(
                 $"[출금 확인]\n코인: {coin}\n네트워크: {chainName}\n수량: {amount}\n주소: {address}\n\n출금을 실행하시겠습니까?",
@@ -314,8 +446,17 @@ namespace CoinTransfer
             btnWithdraw.Enabled = false;
             btnCancelReserved.Enabled = false;
 
-            var questionnaire = txtQuestionnaire.Text?.Trim();
-            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(EnumExchange.Binance);
+            var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(GetSelectedExchange());
+            AppendLog($"[출금] {GetSelectedExchange()} | 코인={coin}, 네트워크={chainName}, 수량={amount}, 주소={address}" + (string.IsNullOrEmpty(tag) ? "" : $", Tag={tag}"));
+            if (!string.IsNullOrEmpty(questionnaire))
+            {
+                AppendLog($"[출금] Travel Rule/수취인 정보 포함 (Questionnaire 길이={questionnaire.Length}).");
+                AppendLog("[출금] 해당 내역(설문/수취인 정보)이 있음 → 출금 가능. 출금 요청 진행.");
+            }
+            else if (!string.IsNullOrEmpty(tag))
+            {
+                AppendLog("[출금] Tag/Memo 포함. 해당 내역 있음 → 출금 가능. 출금 요청 진행.");
+            }
             bool useReservedWithdraw = chkReservedWithdraw.Checked;
             DateTime deadline = dtpDeadline.Value;
             int retryIntervalSeconds = (int)numRetryInterval.Value;
@@ -341,13 +482,14 @@ namespace CoinTransfer
                     AppendLog($"출금 요청 중... {coin} {amount} → {address}" + (attempt > 1 ? $" (예약 출금 {attempt}회차)" : ""));
 
                     (success, msg) = await controller.WithdrawCoin(coin, chainName, amount, address, "", questionnaire ?? "", tag);
+                    AppendLog($"[출금] API 응답: success={success}, msg=\"{msg}\"");
 
                     if (success)
                     {
                         AppendLog($"출금 요청 접수됨! ID: {msg}");
                         AppendLog("※ 이메일/2FA 확인이 필요한 경우, 등록된 이메일 또는 2FA 앱에서 출금을 승인해 주세요.");
                         MessageBox.Show(
-                            $"출금 요청이 접수되었습니다.\n\n출금 ID: {msg}\n\n이메일 또는 2FA 확인이 필요한 경우, Binance에서 안내하는 대로 확인을 완료해 주세요.",
+                            $"출금 요청이 접수되었습니다.\n\n출금 ID: {msg}\n\n이메일 또는 2FA 확인이 필요한 경우, 해당 거래소에서 안내하는 대로 확인을 완료해 주세요.",
                             "출금 접수",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Information);

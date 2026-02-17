@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -270,8 +270,12 @@ namespace ExchangeAPIController
             }
 
             return (bResult, errorMessage);
+        }
 
-
+        /// <summary>MEXC: Travel Rule 조회 API 없음. 규정은 거래소 안내 참고.</summary>
+        public override Task<(bool required, string info)> CheckTravelRuleRequiredAsync()
+        {
+            return Task.FromResult((false, "MEXC: 조회 API 없음. 규정 확인 권장."));
         }
 
         public override (bool, List<string>) GetMarketCoinsAndPairs()

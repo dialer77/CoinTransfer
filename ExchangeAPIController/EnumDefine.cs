@@ -10,13 +10,13 @@ namespace ExchangeAPIController
     {
         Debug,
         Binance,
-        //Upbit,
-        //Bithumb,
-        //Huobi,
-        //Binance_Future,
-        //Coinone,
+        Upbit,
+        Bithumb,
+        Gate,
         Bybit,
+        OKX,
         MEXC,
+        Bitget,
     }
 
     public enum EnumTradeType

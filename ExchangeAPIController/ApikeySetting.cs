@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -26,7 +26,7 @@ namespace ExchangeAPIController
             {
                 m_dicExchangeAccessKey.Add(exchange, "");
                 m_dicExchangeSecretKey.Add(exchange, "");
-
+                m_dicExchangePassphrase.Add(exchange, "");
                 m_dicDepositAddress.Add(exchange, new Dictionary<string, (string, string)>());
             }
         }
@@ -34,6 +34,7 @@ namespace ExchangeAPIController
 
         private Dictionary<EnumExchange, string> m_dicExchangeAccessKey = new Dictionary<EnumExchange, string>();
         private Dictionary<EnumExchange, string> m_dicExchangeSecretKey = new Dictionary<EnumExchange, string>();
+        private Dictionary<EnumExchange, string> m_dicExchangePassphrase = new Dictionary<EnumExchange, string>();
 
         private Dictionary<EnumExchange, Dictionary<string, (string, string)>> m_dicDepositAddress = new Dictionary<EnumExchange, Dictionary<string, (string, string)>>();
 
@@ -74,6 +75,20 @@ namespace ExchangeAPIController
             }
         }
 
+        /// <summary>OKX 등 Passphrase가 필요한 거래소용. config.ini [거래소] Passphrase= 값.</summary>
+        public string GetExchangePassphrase(EnumExchange exchange)
+        {
+            return m_dicExchangePassphrase.TryGetValue(exchange, out string v) ? v : "";
+        }
+
+        public void SetExchangePassphrase(EnumExchange exchange, string passphrase)
+        {
+            if (m_dicExchangePassphrase.ContainsKey(exchange) == false)
+                m_dicExchangePassphrase.Add(exchange, passphrase ?? "");
+            else
+                m_dicExchangePassphrase[exchange] = passphrase ?? "";
+        }
+
         public List<string> GetDepositCoinList(EnumExchange exchange)
         {
 
@@ -109,6 +124,7 @@ namespace ExchangeAPIController
             {
                 ini[exchange.ToString()].Add("AccessKey", m_dicExchangeAccessKey[exchange]);
                 ini[exchange.ToString()].Add("SecretKey", m_dicExchangeSecretKey[exchange]);
+                ini[exchange.ToString()].Add("Passphrase", m_dicExchangePassphrase[exchange]);
 
                 List<string> depositCoinList = m_dicDepositAddress[exchange].Keys.ToList();
                 ini[exchange.ToString()].Add("DepositCoinList", string.Join(",", depositCoinList));
@@ -146,6 +162,8 @@ namespace ExchangeAPIController
 
                 SetExchangeAccessKey(exchange, ini[exchange.ToString()]["AccessKey"].ToString());
                 SetExchangeSecretKey(exchange, ini[exchange.ToString()]["SecretKey"].ToString());
+                if (ini[exchange.ToString()].ContainsKey("Passphrase"))
+                    SetExchangePassphrase(exchange, ini[exchange.ToString()]["Passphrase"].ToString());
                 List<string> coinList = ini[exchange.ToString()]["DepositCoinList"].ToString().Split(',').ToList();
                 foreach(string coinName in coinList)
                 {
