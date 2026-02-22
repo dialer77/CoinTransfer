@@ -46,11 +46,41 @@ namespace ExchangeAPIController
         }
 
         /// <summary>
+        /// 출금 허용(화이트리스트) 주소 리스트 조회. (빗썸 등에서 구현)
+        /// </summary>
+        /// <returns>(성공 여부, 주소 목록. 실패 시 null)</returns>
+        public virtual (bool success, System.Collections.Generic.List<WithdrawAddressItem> list) GetWithdrawAllowedAddresses()
+        {
+            return (false, null);
+        }
+
+        /// <summary>
+        /// 해당 코인·네트워크 출금 지원 여부 검증. (빗썸 등에서 구현)
+        /// </summary>
+        /// <param name="coinName">코인 심볼</param>
+        /// <param name="chainName">출금 네트워크(net_type, ex.BTC, DASH)</param>
+        /// <returns>(지원 여부, 실패 시 사유 메시지)</returns>
+        public virtual (bool supported, string message) ValidateWithdrawSupport(string coinName, string chainName)
+        {
+            return (true, "");
+        }
+
+        /// <summary>
         /// Travel Rule 준수 필요 여부 확인 (Binance 등 일부 거래소만 해당)
         /// </summary>
         public virtual Task<(bool required, string info)> CheckTravelRuleRequiredAsync()
         {
             return Task.FromResult((false, ""));
+        }
+
+        /// <summary>
+        /// 출금 시 수수료를 포함한 실제 출금 요청 금액 계산.
+        /// 사용자 수취 희망 금액 volume에 고정 수수료 + 비율 수수료를 더해 거래소에 요청할 총액을 반환.
+        /// (예: 1개 출금, Fee 0.1 → 1.1 출금 요청하여 수취인은 1 수령)
+        /// </summary>
+        protected static double CalcWithdrawTotalAmount(double volume, decimal withdrawFee, decimal withdrawPercentageFee)
+        {
+            return volume + (double)withdrawFee + volume * (double)withdrawPercentageFee / 100.0;
         }
 
         /// <summary>

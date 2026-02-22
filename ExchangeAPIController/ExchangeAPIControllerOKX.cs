@@ -30,6 +30,13 @@ namespace ExchangeAPIController
             }
         }
 
+        /// <summary>rcvrInfo용: tr에 sourceKey(또는 targetKey)가 있으면 rcvrInfo[targetKey]에 설정.</summary>
+        private static void AddIfPresent(JObject rcvrInfo, JObject tr, string sourceKey, string targetKey)
+        {
+            var v = tr[sourceKey]?.ToString()?.Trim() ?? tr[targetKey]?.ToString()?.Trim();
+            if (!string.IsNullOrEmpty(v)) rcvrInfo[targetKey] = v;
+        }
+
         /// <summary>OKX 에러 메시지 파싱. 51000 시 msg에 'Parameter xxx error' 형태로 원인 포함.</summary>
         private static string ParseError(string content)
         {
@@ -51,6 +58,12 @@ namespace ExchangeAPIController
                     // 체인/네트워크 관련 오류 시 안내
                     if (code == "51000" || (msg.IndexOf("chain", StringComparison.OrdinalIgnoreCase) >= 0))
                         result += " (OKX: 네트워크는 '해당 코인 조회' 후 목록에 표시된 체인명을 그대로 입력)";
+                    // 58213: OKX가 주소를 내부 주소로 해석 또는 주소 형식 오류 (웹 검색: 주소 끝에 ':' 붙어 전송되는 버그 사례 있음)
+                    if (code == "58213" || msg.IndexOf("internal address", StringComparison.OrdinalIgnoreCase) >= 0)
+                        result += " (해결: 1) 주소 끝에 콜론(:) 등 여분 문자가 붙지 않았는지 확인 2) 해당 코인/체인 주소 형식에 맞는지 확인 3) OKX [출금 허용 목록] 사용 시 해당 주소 등록 후 24시간 경과 4) 로그의 [API 응답] 본문 확인)";
+                    // 58237: rcvrInfo(수취인 정보) 필수. 거래소 출금 시 거래소명·수취인 영문명 입력 안내
+                    if (code == "58237" || (msg.IndexOf("rcvrInfo", StringComparison.OrdinalIgnoreCase) >= 0 && msg.IndexOf("recipient", StringComparison.OrdinalIgnoreCase) >= 0))
+                        result += " (안내: 수취처 지갑이 [거래소 지갑]이면 [출금 거래소명(영문)]에 수취 거래소명(예: Binance, Bybit)과 [수취인 영문명]에 해당 거래소 계정에 등록된 수취인 영문 이름(예: John Smith)을 입력한 뒤 다시 시도하세요. 개인 지갑으로 보내는 경우 [수취처 지갑]을 [개인 지갑]으로 선택하세요.)";
                     return result;
                 }
             }
@@ -254,19 +267,103 @@ namespace ExchangeAPIController
                 if (string.IsNullOrWhiteSpace(chain) && (networks == null || networks.Count == 0))
                     chain = "";
 
-                // dest: 2=외부(온체인 출금), 4=내부 전송(OKX 계정 간). 외부 지갑으로 보낼 땐 2 사용.
+                // 출금 수수료 포함 금액: 수취 희망 volume + 고정 수수료 + 비율 수수료
+                NetworkInfo network = (ok && networks != null && networks.Count > 0)
+                    ? (networks.FirstOrDefault(n => string.Equals(n.ChainName, chain, StringComparison.Ordinal))
+                        ?? networks.FirstOrDefault(n => n.WithdrawEnabled) ?? networks[0])
+                    : null;
+                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
+
+                // 공식 예시: on-chain = dest "4", internal = dest "3". toAddr 정규화(OKX/CCXT에서 주소 끝에 ':' 붙는 버그 사례 있음).
+                string toAddr = (address ?? "").Replace("\r", "").Replace("\n", "").Replace("\t", " ").Trim();
+                toAddr = toAddr.TrimEnd(':', ',', ' ');
+                if (toAddr.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && toAddr.Length == 42)
+                    toAddr = "0x" + toAddr.Substring(2).ToLowerInvariant(); // ETH 등: 소문자 통일
+                if (string.IsNullOrEmpty(toAddr))
+                {
+                    m_lastErrorMessage = "출금 주소를 입력해 주세요.";
+                    return (false, m_lastErrorMessage);
+                }
                 string path = "/api/v5/asset/withdrawal";
+                // 공식 예시: on-chain body = amt, dest, ccy, chain, toAddr (dest="4"). amt = 수수료 포함 총 출금액
                 var body = new JObject
                 {
+                    ["amt"] = totalAmount.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'),
+                    ["dest"] = "4",
                     ["ccy"] = ccy,
-                    ["amt"] = volume.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'),
-                    ["dest"] = "2",
-                    ["toAddr"] = (address ?? "").Trim()
+                    ["toAddr"] = toAddr
                 };
                 if (!string.IsNullOrWhiteSpace(chain))
                     body["chain"] = chain;
+                // 문서: dest=4 시 주소가 'address:tag' 형식일 수 있음(예: ARDOR-...:123456). memo 있으면 toAddr에 :tag 붙이거나 memo 필드 사용.
                 if (!string.IsNullOrWhiteSpace(tag))
-                    body["memo"] = tag.Trim();
+                {
+                    string tagVal = tag.Trim();
+                    if (toAddr.IndexOf(':') < 0)
+                        toAddr = toAddr + ":" + tagVal;
+                    else
+                        body["memo"] = tagVal;
+                }
+                body["toAddr"] = toAddr;
+
+                // rcvrInfo: 문서 기준 walletType = exchange | private, exchId(거래소 미등록 시 '0'), rcvrFirstName/rcvrLastName, 선택: rcvrCountry, rcvrCountrySubDivision, rcvrTownName, rcvrStreetName
+                if (!string.IsNullOrWhiteSpace(kycName))
+                {
+                    try
+                    {
+                        var tr = JObject.Parse(kycName.Trim());
+                        string receiverType = tr["receiver_type"]?.ToString()?.Trim();
+                        string receiverEnName = tr["receiver_en_name"]?.ToString()?.Trim();
+                        string exchangeName = tr["exchange_name"]?.ToString()?.Trim();
+                        bool isCorp = string.Equals(receiverType, "corporation", StringComparison.OrdinalIgnoreCase);
+                        if (isCorp)
+                            receiverEnName = tr["receiver_corp_en_name"]?.ToString()?.Trim() ?? receiverEnName;
+                        string exchId = !string.IsNullOrWhiteSpace(exchangeEntity) ? exchangeEntity.Trim() : (exchangeName ?? "");
+                        // walletType: 문서는 exchange | private. UI에서 수취처 지갑(거래소/개인) 선택값 우선, 없으면 거래소명 유무로 추론.
+                        string walletType = (tr["wallet_type"]?.ToString() ?? tr["walletType"]?.ToString() ?? "").Trim();
+                        if (walletType != "exchange" && walletType != "private")
+                        {
+                            bool toExchange = !string.IsNullOrWhiteSpace(exchangeName) || !string.IsNullOrWhiteSpace(exchangeEntity);
+                            walletType = toExchange ? "exchange" : "private";
+                        }
+                        if (walletType == "exchange" && string.IsNullOrWhiteSpace(exchId)) exchId = "0";
+
+                        if (!string.IsNullOrWhiteSpace(receiverEnName) || (walletType == "exchange" && !string.IsNullOrWhiteSpace(exchId)) || walletType == "private")
+                        {
+                            var rcvrInfo = new JObject();
+                            rcvrInfo["walletType"] = walletType;
+                            if (walletType == "exchange") rcvrInfo["exchId"] = exchId;
+                            if (!string.IsNullOrWhiteSpace(receiverEnName))
+                            {
+                                if (isCorp)
+                                {
+                                    rcvrInfo["rcvrFirstName"] = (tr["receiver_corp_ko_name"]?.ToString()?.Trim() ?? tr["receiver_corp_en_name"]?.ToString()?.Trim() ?? receiverEnName);
+                                    rcvrInfo["rcvrLastName"] = "N/A";
+                                }
+                                else
+                                {
+                                    int firstSpace = receiverEnName.IndexOf(' ');
+                                    if (firstSpace > 0)
+                                    {
+                                        rcvrInfo["rcvrFirstName"] = receiverEnName.Substring(0, firstSpace).Trim();
+                                        rcvrInfo["rcvrLastName"] = receiverEnName.Substring(firstSpace + 1).Trim();
+                                    }
+                                    else
+                                    {
+                                        rcvrInfo["rcvrFirstName"] = receiverEnName;
+                                        rcvrInfo["rcvrLastName"] = "";
+                                    }
+                                }
+                            }
+                            AddIfPresent(rcvrInfo, tr, "rcvr_country", "rcvrCountry");
+                            AddIfPresent(rcvrInfo, tr, "rcvr_country_sub_division", "rcvrCountrySubDivision");
+                            AddIfPresent(rcvrInfo, tr, "rcvr_town_name", "rcvrTownName");
+                            AddIfPresent(rcvrInfo, tr, "rcvr_street_name", "rcvrStreetName");
+                            body["rcvrInfo"] = rcvrInfo;
+                        }
+                    }
+                    catch { /* JSON 아님 또는 파싱 실패 시 rcvrInfo 생략 */ }
+                }
 
                 string bodyStr = body.ToString();
                 string ts = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
@@ -292,6 +389,14 @@ namespace ExchangeAPIController
                 }
 
                 var jobj = JObject.Parse(response.Content ?? "{}");
+                // OKX는 HTTP 200이어도 body의 code가 "0"이 아니면 실패(이메일/2FA 확인 필요 등)
+                string apiCode = jobj["code"]?.ToString();
+                if (apiCode != "0")
+                {
+                    m_lastErrorMessage = ParseError(response.Content ?? "");
+                    return (false, m_lastErrorMessage);
+                }
+
                 var data = jobj["data"] as JArray;
                 string wdId = "";
                 string state = "";
@@ -303,7 +408,12 @@ namespace ExchangeAPIController
                 }
                 string msg = string.IsNullOrEmpty(wdId) ? "접수됨" : wdId;
                 if (!string.IsNullOrEmpty(state))
+                {
                     msg += " (상태:" + state + ")";
+                    // state -2: 출금 대기(이메일/2FA 확인 필요). 거래소에서 확인 완료해야 실제 출금 처리됨
+                    if (state == "-2")
+                        msg += " ※ OKX 앱/이메일에서 출금 확인을 완료해 주세요.";
+                }
                 return (true, msg);
             }
             catch (Exception ex)

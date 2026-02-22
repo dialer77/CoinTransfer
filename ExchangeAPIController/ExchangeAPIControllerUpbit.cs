@@ -225,8 +225,16 @@ namespace ExchangeAPIController
                     return (false, m_lastErrorMessage);
                 }
 
+                // 출금 수수료 포함 금액
+                var (netOk, netList) = GetCoinNetworksDetail(coinName);
+                string netTypeForUpbit = string.IsNullOrWhiteSpace(chainName) ? "default" : chainName.Trim();
+                NetworkInfo network = (netOk && netList != null && netList.Count > 0)
+                    ? (netList.FirstOrDefault(n => string.Equals(n.ChainName, netTypeForUpbit, StringComparison.OrdinalIgnoreCase)) ?? netList[0])
+                    : null;
+                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
+
                 // POST body (JSON). query_hash는 query string 형식(키=값&키=값). 업비트는 JSON 키 순서대로 쿼리 문자열 구성 후 SHA512 해시.
-                string amountStr = volume.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.');
+                string amountStr = totalAmount.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.');
                 var body = new Dictionary<string, object>
                 {
                     { "currency", coinName.Trim() },

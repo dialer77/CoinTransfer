@@ -156,11 +156,19 @@ namespace ExchangeAPIController
             m_lastErrorMessage = "";
             try
             {
+                // 출금 수수료 포함 금액
+                var (netOk, netList) = GetCoinNetworksDetail(coinName);
+                NetworkInfo network = (netOk && netList != null && netList.Count > 0)
+                    ? (netList.FirstOrDefault(n => !string.IsNullOrWhiteSpace(chainName) && string.Equals(n.ChainName, chainName.Trim(), StringComparison.OrdinalIgnoreCase))
+                        ?? netList.FirstOrDefault(n => n.WithdrawEnabled) ?? netList[0])
+                    : null;
+                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
+
                 string path = "/api/v4/withdrawals";
                 var body = new JObject
                 {
                     ["currency"] = coinName.Trim(),
-                    ["amount"] = volume.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'),
+                    ["amount"] = totalAmount.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'),
                     ["address"] = address.Trim()
                 };
                 if (!string.IsNullOrWhiteSpace(chainName))
