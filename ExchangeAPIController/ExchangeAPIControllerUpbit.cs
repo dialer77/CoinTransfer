@@ -129,7 +129,8 @@ namespace ExchangeAPIController
         }
 
         /// <summary>
-        /// 업비트: GET /v1/withdraws/chance?currency=XXX → 출금 가능 네트워크(net_type) 등
+        /// 업비트: GET /v1/withdraws/chance?currency=XXX&amp;net_type=YYY → 출금 수수료 등.
+        /// 멀티체인 코인(USDT 등)은 net_type 필수이므로, currency만으로 400이면 출금 허용 주소 API로 net_type 목록을 구해 각각 조회.
         /// </summary>
         public override (bool, List<NetworkInfo>) GetCoinNetworksDetail(string coinName)
         {
@@ -144,60 +145,51 @@ namespace ExchangeAPIController
                     return (false, null);
                 }
 
-                string query = $"currency={Uri.EscapeDataString(coinName.Trim())}";
-                string jwt = CreateJwtToken(accessKey, secretKey, query);
-
+                string currency = coinName.Trim();
                 var client = new RestClient(BASE_URL);
-                var request = new RestRequest("/v1/withdraws/chance", Method.Get);
-                request.AddQueryParameter("currency", coinName.Trim());
-                request.AddHeader("Authorization", "Bearer " + jwt);
 
-                ApiRequestLogger.LogRequest("GET", BASE_URL + "/v1/withdraws/chance", "currency=" + coinName);
-                RestResponse response = client.Execute(request);
-                ApiRequestLogger.LogResponse((int)response.StatusCode, response.Content ?? "", 3000);
+                // 1) 먼저 currency만으로 시도 (단일 네트워크 코인: BTC, ETH 등)
+                var (ok, list) = TryWithdrawsChance(client, accessKey, secretKey, currency, null);
+                if (ok && list != null && list.Count > 0)
+                    return (true, list);
+                if (ok)
+                    return (true, list);
 
-                if (!response.IsSuccessful)
-                {
-                    m_lastErrorMessage = ParseUpbitError(response.Content, response.StatusCode);
+                // 2) 400 invalid_parameter → 멀티체인 코인. 출금 허용 주소에서 해당 통화의 net_type 목록 조회
+                var netTypes = GetNetTypesFromCoinAddresses(accessKey, secretKey, currency);
+                if (netTypes == null)
                     return (false, null);
-                }
 
-                var jobj = JObject.Parse(response.Content ?? "{}");
-                var list = new List<NetworkInfo>();
-                // 업비트 응답: withdraw_limit (전체), currency, withdraw_fee 등. 멀티체인 시 withdraw_chance[] 또는 net_type 별 정보
-                var withdrawChances = jobj["withdraw_chance"] as JArray;
-                if (withdrawChances != null && withdrawChances.Count > 0)
+                if (netTypes.Count == 0)
                 {
-                    foreach (var w in withdrawChances)
+                    // 등록된 주소 없으면 단일 체인처럼 net_type=통화코드 시도 (BTC, SRN 등)
+                    netTypes.Add(currency);
+                    // USDT 등 알려진 멀티체인은 흔한 net_type 추가
+                    if (string.Equals(currency, "USDT", StringComparison.OrdinalIgnoreCase))
                     {
-                        string netType = w["net_type"]?.ToString() ?? "default";
-                        decimal fee = ParseDecimal(w["withdraw_fee"]?.ToString());
-                        decimal min = ParseDecimal(w["withdraw_limit_min"]?.ToString());
-                        list.Add(new NetworkInfo
-                        {
-                            ChainName = netType,
-                            WithdrawFee = fee,
-                            WithdrawMin = min,
-                            WithdrawEnabled = true,
-                            DepositEnabled = true
-                        });
+                        netTypes.Clear();
+                        netTypes.Add("ERC20");
+                        netTypes.Add("TRC20");
+                        netTypes.Add("TRX");
                     }
                 }
-                else
+
+                list = new List<NetworkInfo>();
+                foreach (string netType in netTypes)
                 {
-                    // 단일 네트워크 코인
-                    decimal fee = ParseDecimal(jobj["withdraw_fee"]?.ToString());
-                    decimal min = ParseDecimal(jobj["withdraw_limit_min"]?.ToString());
-                    list.Add(new NetworkInfo
+                    (ok, var oneList) = TryWithdrawsChance(client, accessKey, secretKey, currency, netType);
+                    if (ok && oneList != null)
                     {
-                        ChainName = "default",
-                        WithdrawFee = fee,
-                        WithdrawMin = min,
-                        WithdrawEnabled = true,
-                        DepositEnabled = true
-                    });
+                        foreach (var n in oneList)
+                        {
+                            if (list.All(x => x.ChainName != n.ChainName))
+                                list.Add(n);
+                        }
+                    }
                 }
-                return (true, list);
+                if (list.Count > 0)
+                    return (true, list);
+                return (false, null);
             }
             catch (Exception ex)
             {
@@ -206,10 +198,155 @@ namespace ExchangeAPIController
             }
         }
 
+        /// <summary>
+        /// GET /v1/withdraws/chance 호출. net_type null이면 currency만 전달. 반환: (성공 여부, 응답 본문).
+        /// </summary>
+        private (bool ok, string content) ExecuteWithdrawsChance(RestClient client, string accessKey, string secretKey, string currency, string netType)
+        {
+            string query = "currency=" + Uri.EscapeDataString(currency);
+            if (!string.IsNullOrEmpty(netType))
+                query += "&net_type=" + Uri.EscapeDataString(netType);
+            string jwt = CreateJwtToken(accessKey, secretKey, query);
+
+            var request = new RestRequest("/v1/withdraws/chance", Method.Get);
+            request.AddQueryParameter("currency", currency);
+            if (!string.IsNullOrEmpty(netType))
+                request.AddQueryParameter("net_type", netType);
+            request.AddHeader("Authorization", "Bearer " + jwt);
+
+            ApiRequestLogger.LogRequest("GET", BASE_URL + "/v1/withdraws/chance", string.IsNullOrEmpty(netType) ? "currency=" + currency : "currency=" + currency + ", net_type=" + netType);
+            RestResponse response = client.Execute(request);
+            ApiRequestLogger.LogResponse((int)response.StatusCode, response.Content ?? "", 3000);
+
+            if (!response.IsSuccessful)
+            {
+                m_lastErrorMessage = ParseUpbitError(response.Content, response.StatusCode);
+                return (false, null);
+            }
+            return (true, response.Content ?? "{}");
+        }
+
+        /// <summary>
+        /// GET /v1/withdraws/chance 호출 후 NetworkInfo 리스트로 파싱.
+        /// </summary>
+        private (bool ok, List<NetworkInfo> list) TryWithdrawsChance(RestClient client, string accessKey, string secretKey, string currency, string netType)
+        {
+            var (ok, content) = ExecuteWithdrawsChance(client, accessKey, secretKey, currency, netType);
+            if (!ok || string.IsNullOrEmpty(content))
+                return (false, null);
+            var jobj = JObject.Parse(content);
+            var list = new List<NetworkInfo>();
+            var currencyObj = jobj["currency"] as JObject;
+            var withdrawLimitObj = jobj["withdraw_limit"] as JObject;
+            decimal fee = ParseDecimal(currencyObj?["withdraw_fee"]?.ToString());
+            decimal min = ParseDecimal(withdrawLimitObj?["minimum"]?.ToString());
+            string chainName = netType ?? "default";
+            list.Add(new NetworkInfo
+            {
+                ChainName = chainName,
+                WithdrawFee = fee,
+                WithdrawMin = min,
+                WithdrawEnabled = true,
+                DepositEnabled = true
+            });
+            return (true, list);
+        }
+
+        /// <summary>
+        /// GET /v1/withdraws/coin_addresses 로 해당 통화의 net_type 목록 수집 (중복 제거).
+        /// </summary>
+        private List<string> GetNetTypesFromCoinAddresses(string accessKey, string secretKey, string currency)
+        {
+            try
+            {
+                string jwt = CreateJwtToken(accessKey, secretKey, null);
+                var client = new RestClient(BASE_URL);
+                var request = new RestRequest("/v1/withdraws/coin_addresses", Method.Get);
+                request.AddHeader("Authorization", "Bearer " + jwt);
+                ApiRequestLogger.LogRequest("GET", BASE_URL + "/v1/withdraws/coin_addresses", "(출금 허용 주소)");
+                RestResponse response = client.Execute(request);
+                ApiRequestLogger.LogResponse((int)response.StatusCode, response.Content ?? "", 2000);
+                if (!response.IsSuccessful)
+                    return new List<string>();
+                var arr = JArray.Parse(response.Content ?? "[]");
+                var netTypes = new List<string>();
+                foreach (var item in arr)
+                {
+                    string c = item["currency"]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(c) || !string.Equals(c, currency, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string nt = item["net_type"]?.ToString()?.Trim();
+                    if (!string.IsNullOrEmpty(nt) && !netTypes.Contains(nt))
+                        netTypes.Add(nt);
+                }
+                return netTypes;
+            }
+            catch
+            {
+                return new List<string>();
+            }
+        }
+
         private static decimal ParseDecimal(string s)
         {
             if (string.IsNullOrWhiteSpace(s)) return 0m;
             return decimal.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal v) ? v : 0m;
+        }
+
+        /// <summary>
+        /// 업비트: GET /v1/withdraws/chance?currency=XXX&amp;net_type=YYY 로 출금 지원 여부 검증.
+        /// 응답의 withdraw_limit.can_withdraw, currency.wallet_support 확인.
+        /// </summary>
+        public override (bool supported, string message) ValidateWithdrawSupport(string coinName, string chainName)
+        {
+            m_lastErrorMessage = "";
+            try
+            {
+                string accessKey = ApikeySetting.GetInstance().GetExchangeAccessKey(m_exchange);
+                string secretKey = ApikeySetting.GetInstance().GetExchangeSecretKey(m_exchange);
+                if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
+                {
+                    m_lastErrorMessage = "API 키를 입력한 뒤 저장해 주세요.";
+                    return (false, m_lastErrorMessage);
+                }
+                string currency = (coinName ?? "").Trim();
+                if (string.IsNullOrEmpty(currency))
+                {
+                    m_lastErrorMessage = "코인을 입력해 주세요.";
+                    return (false, m_lastErrorMessage);
+                }
+                string netType = string.IsNullOrWhiteSpace(chainName) ? "default" : chainName.Trim();
+                var client = new RestClient(BASE_URL);
+                var (ok, content) = ExecuteWithdrawsChance(client, accessKey, secretKey, currency, netType);
+                if (!ok)
+                {
+                    if (string.IsNullOrWhiteSpace(chainName))
+                    {
+                        netType = currency;
+                        (ok, content) = ExecuteWithdrawsChance(client, accessKey, secretKey, currency, netType);
+                    }
+                    if (!ok)
+                        return (false, m_lastErrorMessage);
+                }
+                if (string.IsNullOrEmpty(content))
+                    return (false, m_lastErrorMessage ?? "출금 가능 정보를 가져오지 못했습니다.");
+                var jobj = JObject.Parse(content);
+                var withdrawLimitObj = jobj["withdraw_limit"] as JObject;
+                bool canWithdraw = withdrawLimitObj?["can_withdraw"]?.Value<bool?>() ?? true;
+                var walletSupport = jobj["currency"]?["wallet_support"] as JArray;
+                bool hasWithdrawInSupport = walletSupport == null || walletSupport.Any(t => string.Equals(t?.ToString(), "withdraw", StringComparison.OrdinalIgnoreCase));
+                if (!canWithdraw || !hasWithdrawInSupport)
+                {
+                    m_lastErrorMessage = "해당 코인·네트워크는 현재 출금이 지원되지 않습니다.";
+                    return (false, m_lastErrorMessage);
+                }
+                return (true, "");
+            }
+            catch (Exception ex)
+            {
+                m_lastErrorMessage = ex.Message;
+                return (false, m_lastErrorMessage);
+            }
         }
 
         public override async Task<(bool, string)> WithdrawCoin(string coinName, string chainName, double volume, string address, string exchangeEntity = "", string kycName = "", string tag = null)
