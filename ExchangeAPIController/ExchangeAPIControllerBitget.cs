@@ -174,21 +174,15 @@ namespace ExchangeAPIController
             m_lastErrorMessage = "";
             try
             {
-                // 출금 수수료 포함 금액
+                // 수량 = 출금 요청 금액(수수료 포함). API가 수수료 차감 후 전송.
                 string chain = string.IsNullOrWhiteSpace(chainName) ? "default" : chainName.Trim();
-                var (netOk, netList) = GetCoinNetworksDetail(coinName);
-                NetworkInfo network = (netOk && netList != null && netList.Count > 0)
-                    ? (netList.FirstOrDefault(n => string.Equals(n.ChainName, chain, StringComparison.OrdinalIgnoreCase)) ?? netList[0])
-                    : null;
-                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
-
                 string path = "/api/v2/asset/withdraw";
                 var body = new JObject
                 {
                     ["coin"] = coinName.Trim(),
                     ["chain"] = chain,
                     ["address"] = address.Trim(),
-                    ["amount"] = totalAmount.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.')
+                    ["amount"] = volume.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.')
                 };
                 if (!string.IsNullOrWhiteSpace(tag))
                     body["tag"] = tag.Trim();

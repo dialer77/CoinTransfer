@@ -267,13 +267,7 @@ namespace ExchangeAPIController
                 if (string.IsNullOrWhiteSpace(chain) && (networks == null || networks.Count == 0))
                     chain = "";
 
-                // 출금 수수료 포함 금액: 수취 희망 volume + 고정 수수료 + 비율 수수료
-                NetworkInfo network = (ok && networks != null && networks.Count > 0)
-                    ? (networks.FirstOrDefault(n => string.Equals(n.ChainName, chain, StringComparison.Ordinal))
-                        ?? networks.FirstOrDefault(n => n.WithdrawEnabled) ?? networks[0])
-                    : null;
-                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
-
+                // 수량 = 출금 요청 금액(수수료 포함). API가 수수료 차감 후 전송하므로 volume 그대로 전달.
                 // 공식 예시: on-chain = dest "4", internal = dest "3". toAddr 정규화(OKX/CCXT에서 주소 끝에 ':' 붙는 버그 사례 있음).
                 string toAddr = (address ?? "").Replace("\r", "").Replace("\n", "").Replace("\t", " ").Trim();
                 toAddr = toAddr.TrimEnd(':', ',', ' ');
@@ -285,10 +279,10 @@ namespace ExchangeAPIController
                     return (false, m_lastErrorMessage);
                 }
                 string path = "/api/v5/asset/withdrawal";
-                // 공식 예시: on-chain body = amt, dest, ccy, chain, toAddr (dest="4"). amt = 수수료 포함 총 출금액
+                // 공식 예시: on-chain body = amt, dest, ccy, chain, toAddr (dest="4"). amt = 수수료 포함 출금 수량(그대로 전달)
                 var body = new JObject
                 {
-                    ["amt"] = totalAmount.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'),
+                    ["amt"] = volume.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'),
                     ["dest"] = "4",
                     ["ccy"] = ccy,
                     ["toAddr"] = toAddr

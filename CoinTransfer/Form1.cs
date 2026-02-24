@@ -16,6 +16,9 @@ namespace CoinTransfer
         private bool m_isRefreshing = false;
         private bool m_isWithdrawing = false;
         private CancellationTokenSource m_reservedWithdrawCts;
+        private decimal m_lastFeeFixed;
+        private decimal m_lastFeePctFee;
+        private string m_lastFeeCoin;
 
         public Form1()
         {
@@ -48,6 +51,7 @@ namespace CoinTransfer
             if (cmbTravelRuleWalletType.Items.Count > 0 && cmbTravelRuleWalletType.SelectedIndex < 0)
                 cmbTravelRuleWalletType.SelectedIndex = 1; // 기본: 개인 지갑
             UpdateTravelRuleNameLabels();
+            txtAmount.TextChanged += (s, e) => RefreshWithdrawFeeFromAmountOnly();
 
             AppendLog("프로그램 시작. 거래소를 선택하고 API 키를 입력한 뒤 저장 후 잔고를 새로고침하세요.");
         }
@@ -363,6 +367,7 @@ namespace CoinTransfer
 
         /// <summary>
         /// 코인·네트워크·수량에 따라 출금 수수료를 조회해 lblWithdrawFee에 표시.
+        /// 잔고 조회·출금 지원 확인과 동일하게, 입력한 코인+네트워크로 검증 API 호출 후 수수료 표시(업비트 등). 실패 시 GetCoinNetworksDetail로 시도.
         /// </summary>
         private void UpdateWithdrawFeeLabel()
         {
@@ -375,6 +380,23 @@ namespace CoinTransfer
                 return;
             }
             var controller = ExchangeApiManager.GetInstance().GetExchangeAPIController(GetSelectedExchange());
+
+            // 네트워크 입력된 경우: 출금 지원 확인과 동일하게 검증 API( chance 등)로 수수료 조회 후 표시
+            if (!string.IsNullOrEmpty(chainName))
+            {
+                var (supported, _) = controller.ValidateWithdrawSupport(coin, chainName);
+                if (supported)
+                {
+                    var (hasInfo, _, _, _) = controller.GetLastWithdrawFeeFromValidation();
+                    if (hasInfo)
+                    {
+                        ApplyWithdrawFeeFromValidation(controller, coin, chainName);
+                        return;
+                    }
+                }
+            }
+
+            // 검증 API로 수수료 못 가져온 경우: GetCoinNetworksDetail로 시도
             var (ok, networks) = controller.GetCoinNetworksDetail(coin);
             if (!ok || networks == null || networks.Count == 0)
             {
@@ -383,16 +405,68 @@ namespace CoinTransfer
             }
             var network = networks.FirstOrDefault(n => string.Equals(n.ChainName, chainName, StringComparison.OrdinalIgnoreCase))
                 ?? networks.FirstOrDefault(n => n.WithdrawEnabled) ?? networks[0];
-            double amount = 0;
-            double.TryParse(txtAmount?.Text?.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out amount);
             decimal feeFixed = network.WithdrawFee;
             decimal feePct = network.WithdrawPercentageFee;
+            m_lastFeeFixed = feeFixed;
+            m_lastFeePctFee = feePct;
+            m_lastFeeCoin = coin;
+            double amount = 0;
+            double.TryParse(txtAmount?.Text?.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out amount);
             decimal totalFee = feeFixed + (decimal)(amount * (double)feePct / 100.0);
             string coinUpper = coin.ToUpperInvariant();
             if (totalFee == 0 && feeFixed == 0 && feePct == 0)
-                lblWithdrawFee.Text = "수수료: 0 " + coinUpper;
+                lblWithdrawFee.Text = "수수료: 0 " + coinUpper + (amount > 0 ? " (수량=출금액)" : "");
+            else if (amount > 0)
+            {
+                decimal receive = (decimal)amount - totalFee;
+                lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper} → 실제 수령 예상: {receive:G29}";
+            }
             else if (feePct != 0)
                 lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper} (고정 {feeFixed} + 비율 {feePct}%)";
+            else
+                lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper}";
+        }
+
+        /// <summary>
+        /// 출금 지원 확인 성공 시 해당 API 응답 수수료로 라벨 갱신 (업비트 등 검증 API에서 수수료 반환하는 경우).
+        /// </summary>
+        private void ApplyWithdrawFeeFromValidation(ExchangeAPIControllerBase controller, string coin, string chainName)
+        {
+            if (lblWithdrawFee == null || controller == null) return;
+            var (hasInfo, withdrawFee, _, withdrawPctFee) = controller.GetLastWithdrawFeeFromValidation();
+            if (!hasInfo) return;
+            m_lastFeeFixed = withdrawFee;
+            m_lastFeePctFee = withdrawPctFee;
+            m_lastFeeCoin = coin?.Trim() ?? "";
+            double amount = 0;
+            double.TryParse(txtAmount?.Text?.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out amount);
+            decimal totalFee = withdrawFee + (decimal)(amount * (double)withdrawPctFee / 100.0);
+            string coinUpper = (coin ?? "").ToUpperInvariant();
+            if (totalFee == 0 && withdrawFee == 0 && withdrawPctFee == 0)
+                lblWithdrawFee.Text = "수수료: 0 " + coinUpper;
+            else if (amount > 0)
+                lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper} → 실제 수령 예상: {(decimal)amount - totalFee:G29}";
+            else
+                lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper}";
+        }
+
+        /// <summary>
+        /// 수량만 바뀌었을 때 저장된 수수료로 계산만 해서 예상 내역 갱신 (API 호출 없음).
+        /// </summary>
+        private void RefreshWithdrawFeeFromAmountOnly()
+        {
+            if (lblWithdrawFee == null) return;
+            string coin = GetCoinText();
+            if (string.IsNullOrEmpty(m_lastFeeCoin) || !string.Equals(m_lastFeeCoin, coin, StringComparison.OrdinalIgnoreCase))
+                return;
+            double amount = 0;
+            double.TryParse(txtAmount?.Text?.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out amount);
+            decimal totalFee = m_lastFeeFixed + (decimal)(amount * (double)m_lastFeePctFee / 100.0);
+            string coinUpper = (m_lastFeeCoin ?? "").ToUpperInvariant();
+            if (totalFee == 0 && m_lastFeeFixed == 0 && m_lastFeePctFee == 0)
+                lblWithdrawFee.Text = "수수료: 0 " + coinUpper + (amount > 0 ? " (수량=출금액)" : "");
+            else if (amount > 0)
+                lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper} → 실제 수령 예상: {(decimal)amount - totalFee:G29}";
             else
                 lblWithdrawFee.Text = $"수수료: {totalFee:G29} {coinUpper}";
         }
@@ -507,6 +581,7 @@ namespace CoinTransfer
             if (supported)
             {
                 AppendLog("[출금 지원 확인] 해당 코인·네트워크로 출금이 지원됩니다.");
+                ApplyWithdrawFeeFromValidation(controller, coin, netName);
                 MessageBox.Show("해당 코인·네트워크로 출금이 지원됩니다.", "출금 지원 확인", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else

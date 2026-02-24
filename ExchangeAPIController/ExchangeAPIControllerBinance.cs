@@ -291,21 +291,14 @@ namespace ExchangeAPIController
                     ApiRequestLogger.Log($"[Travel Rule] 준수 필요 ({travelRuleInfo}). localentity/withdraw/apply 사용");
                 }
 
-                // 출금 수수료 포함 금액
-                var (netOk, netList) = GetCoinNetworksDetail(coinName);
-                NetworkInfo network = (netOk && netList != null && netList.Count > 0)
-                    ? (netList.FirstOrDefault(n => !string.IsNullOrEmpty(chainName) && string.Equals(n.ChainName, chainName, StringComparison.OrdinalIgnoreCase))
-                        ?? netList.FirstOrDefault(n => n.WithdrawEnabled) ?? netList[0])
-                    : null;
-                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
-
+                // 수량 = 출금 요청 금액(수수료 포함). API가 수수료 차감 후 전송.
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
                 var parameters = new Dictionary<string, string>
                 {
                     { "coin", coinName },
                     { "address", address },
-                    { "amount", totalAmount.ToString("0.##############", System.Globalization.CultureInfo.InvariantCulture) },
+                    { "amount", volume.ToString("0.##############", System.Globalization.CultureInfo.InvariantCulture) },
                     { "timestamp", timestamp.ToString() }
                 };
 

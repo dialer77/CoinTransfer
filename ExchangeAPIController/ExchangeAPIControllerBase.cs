@@ -66,6 +66,15 @@ namespace ExchangeAPIController
         }
 
         /// <summary>
+        /// 출금 지원 확인 등으로 조회한 마지막 수수료 정보. UI 수수료 라벨 갱신용.
+        /// </summary>
+        /// <returns>(정보 있음, 고정수수료, 최소출금, 비율수수료%)</returns>
+        public virtual (bool hasInfo, decimal withdrawFee, decimal withdrawMin, decimal withdrawPctFee) GetLastWithdrawFeeFromValidation()
+        {
+            return (false, 0m, 0m, 0m);
+        }
+
+        /// <summary>
         /// Travel Rule 준수 필요 여부 확인 (Binance 등 일부 거래소만 해당)
         /// </summary>
         public virtual Task<(bool required, string info)> CheckTravelRuleRequiredAsync()
@@ -74,13 +83,20 @@ namespace ExchangeAPIController
         }
 
         /// <summary>
-        /// 출금 시 수수료를 포함한 실제 출금 요청 금액 계산.
-        /// 사용자 수취 희망 금액 volume에 고정 수수료 + 비율 수수료를 더해 거래소에 요청할 총액을 반환.
-        /// (예: 1개 출금, Fee 0.1 → 1.1 출금 요청하여 수취인은 1 수령)
+        /// 출금 수수료(고정+비율) 계산. 수량은 수수료 포함 금액이므로 실제 수령 예상 = volume - 수수료.
+        /// (표시용 등. 출금 API에는 수량을 그대로 전달하며, 거래소가 수수료를 차감함.)
         /// </summary>
-        protected static double CalcWithdrawTotalAmount(double volume, decimal withdrawFee, decimal withdrawPercentageFee)
+        protected static double CalcWithdrawTotalFee(double volume, decimal withdrawFee, decimal withdrawPercentageFee)
         {
-            return volume + (double)withdrawFee + volume * (double)withdrawPercentageFee / 100.0;
+            return (double)withdrawFee + volume * (double)withdrawPercentageFee / 100.0;
+        }
+
+        /// <summary>
+        /// 수수료를 포함한 출금 요청 금액 (수취 희망 volume + 수수료). API에서 수수료를 자동 차감하지 않는 거래소(업비트 등)용.
+        /// </summary>
+        protected static double CalcWithdrawAmountIncludingFee(double volume, decimal withdrawFee, decimal withdrawPercentageFee)
+        {
+            return volume + CalcWithdrawTotalFee(volume, withdrawFee, withdrawPercentageFee);
         }
 
         /// <summary>

@@ -203,14 +203,7 @@ namespace ExchangeAPIController
                 string accessKey = ApikeySetting.GetInstance().GetExchangeAccessKey(m_exchange);
                 string secretKey = ApikeySetting.GetInstance().GetExchangeSecretKey(m_exchange);
 
-                // 출금 수수료 포함 금액
-                var (netOk, netList) = GetCoinNetworksDetail(coinName);
-                NetworkInfo network = (netOk && netList != null && netList.Count > 0)
-                    ? (netList.FirstOrDefault(n => !string.IsNullOrWhiteSpace(chainName) && string.Equals(n.ChainName, chainName, StringComparison.OrdinalIgnoreCase))
-                        ?? netList.FirstOrDefault(n => n.WithdrawEnabled) ?? netList[0])
-                    : null;
-                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
-
+                // 수량 = 출금 요청 금액(수수료 포함). API가 수수료 차감 후 전송.
                 // 서버 시간 가져오기
                 var client = new RestClient(BASE_URL);
                 var timeRequest = new RestRequest("/api/v3/time", Method.Get);
@@ -223,7 +216,7 @@ namespace ExchangeAPIController
                     { "coin", coinName },
                     { "network", chainName },
                     { "address", address },
-                    { "amount", totalAmount.ToString() },
+                    { "amount", volume.ToString() },
                     { "memo", string.IsNullOrEmpty(tag) ? "" : tag }
                 };
 

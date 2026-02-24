@@ -322,10 +322,8 @@ namespace ExchangeAPIController
                     return (false, "chain 이 잘못되었습니다");
                 }
 
-                // 출금 수수료 포함 금액 (수취 희망 volume + 고정 수수료 + 비율 수수료)
-                double totalAmount = CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee);
-
-                (bool, string) transferResult = await CreateInternalTransfer(coinName, totalAmount, "UNIFIED", "FUND");
+                // 수량 = 출금 요청 금액(수수료 포함). API가 수수료 차감 후 전송.
+                (bool, string) transferResult = await CreateInternalTransfer(coinName, volume, "UNIFIED", "FUND");
                 if (transferResult.Item1 == false)
                 {
                     return transferResult;
@@ -335,7 +333,7 @@ namespace ExchangeAPIController
                 string accessKey = ApikeySetting.GetInstance().GetExchangeAccessKey(m_exchange);
                 string secretKey = ApikeySetting.GetInstance().GetExchangeSecretKey(m_exchange);
                 bybit.net.api.ApiServiceImp.BybitAssetService assetService = new bybit.net.api.ApiServiceImp.BybitAssetService(accessKey, secretKey, url: BASE_URL);
-                string result = await assetService.CreateInternalTransfer(AccountType.Spot, AccountType.Fund, coinName, totalAmount.ToString());
+                string result = await assetService.CreateInternalTransfer(AccountType.Spot, AccountType.Fund, coinName, volume.ToString());
 
                 long timeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -352,7 +350,7 @@ namespace ExchangeAPIController
                     {"coin", coinName},
                     {"chain", chainName},
                     {"address", address},
-                    {"amount", totalAmount.ToString()},
+                    {"amount", volume.ToString()},
                     {"timestamp", timeStamp},
                     {"accountType", "FUND"},
                     {"beneficiary", beneficiary}
@@ -401,7 +399,7 @@ namespace ExchangeAPIController
                         errorMessage = $"Error {retCode}: {retMsg}";
                         m_lastErrorMessage = errorMessage;
 
-                        await CreateInternalTransfer(coinName, totalAmount, "FUND", "UNIFIED");
+                        await CreateInternalTransfer(coinName, volume, "FUND", "UNIFIED");
                         return (false, errorMessage);
                     }
                 }
@@ -410,7 +408,7 @@ namespace ExchangeAPIController
                     errorMessage = $"HTTP Error: {response.StatusCode} - {response.ErrorMessage}";
                     m_lastErrorMessage = errorMessage;
 
-                    await CreateInternalTransfer(coinName, totalAmount, "FUND", "UNIFIED");
+                    await CreateInternalTransfer(coinName, volume, "FUND", "UNIFIED");
                     return (false, errorMessage);
                 }
             }

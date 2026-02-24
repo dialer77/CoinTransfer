@@ -402,18 +402,12 @@ namespace ExchangeAPIController
                     return (false, m_lastErrorMessage);
                 }
 
-                // 출금 수수료 포함 금액
-                var (netOk, netList) = GetCoinNetworksDetail(coinName);
-                string netType = string.IsNullOrWhiteSpace(chainName) ? "DEFAULT" : chainName.Trim().ToUpperInvariant();
-                NetworkInfo network = (netOk && netList != null && netList.Count > 0)
-                    ? (netList.FirstOrDefault(n => string.Equals(n.ChainName, netType, StringComparison.OrdinalIgnoreCase)) ?? netList[0])
-                    : null;
-                double totalAmount = network != null ? CalcWithdrawTotalAmount(volume, network.WithdrawFee, network.WithdrawPercentageFee) : volume;
-
+                // 수량 = 출금 요청 금액(수수료 포함). API가 수수료 차감 후 전송.
                 // 문서: POST body는 JSON, query_hash는 querystring(key=value&...)을 SHA512 해싱. 서버는 JSON 파싱 후 동일 규칙으로 해시 검증.
                 // Upbit와 동일하게 net_type(네트워크) 필수. 미지정 시 default. (USDT: trc20 등 체인별 값 필요할 수 있음)
-                string amountStr = totalAmount.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.');
+                string amountStr = volume.ToString("F8", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.');
                 string currency = (coinName ?? "").Trim().ToUpperInvariant();
+                string netType = string.IsNullOrWhiteSpace(chainName) ? "DEFAULT" : chainName.Trim().ToUpperInvariant();
                 string addr = (address ?? "").Trim();
                 var formPairs = new List<KeyValuePair<string, string>>
                 {
