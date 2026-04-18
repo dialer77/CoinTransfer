@@ -747,7 +747,7 @@ namespace CoinTransfer
                 AppendLog("[출금] Tag/Memo 포함.");
             bool useReservedWithdraw = chkReservedWithdraw.Checked;
             DateTime deadline = dtpDeadline.Value;
-            int retryIntervalSeconds = (int)numRetryInterval.Value;
+            double retryIntervalSec = (double)numRetryInterval.Value;
             int maxSuccesses = (int)numReservedWithdrawCount.Value;
             int successCount = 0;
             int attempt = 0;
@@ -789,12 +789,12 @@ namespace CoinTransfer
                                 MessageBoxIcon.Information);
                             break;
                         }
-                        AppendLog($"다음 출금까지 {retryIntervalSeconds}초 대기 중... (마감: {deadline:HH:mm})");
+                        AppendLog($"다음 출금까지 {retryIntervalSec:0.##}초 대기 중... (마감: {deadline:HH:mm})");
                         btnWithdraw.Text = $"대기 중... (성공 {successCount}/{maxSuccesses})";
                         btnCancelReserved.Enabled = true;
                         try
                         {
-                            await Task.Delay(TimeSpan.FromSeconds(retryIntervalSeconds), m_reservedWithdrawCts.Token);
+                            await Task.Delay(TimeSpan.FromSeconds(retryIntervalSec), m_reservedWithdrawCts.Token);
                         }
                         catch (OperationCanceledException)
                         {
@@ -812,7 +812,7 @@ namespace CoinTransfer
                         break;
                     }
 
-                    var nextRetry = DateTime.Now.AddSeconds(retryIntervalSeconds);
+                    var nextRetry = DateTime.Now.AddSeconds(retryIntervalSec);
                     if (nextRetry > deadline)
                     {
                         AppendLog($"마감시간({deadline:HH:mm}) 도달. 예약 출금을 종료합니다. (성공 {successCount}/{maxSuccesses})");
@@ -820,13 +820,13 @@ namespace CoinTransfer
                         break;
                     }
 
-                    AppendLog($"{retryIntervalSeconds}초 후 재시도 예정 (마감: {deadline:HH:mm})...");
+                    AppendLog($"{retryIntervalSec:0.##}초 후 재시도 예정 (마감: {deadline:HH:mm})...");
                     btnWithdraw.Text = $"재시도 대기 중... (성공 {successCount}/{maxSuccesses})";
                     btnCancelReserved.Enabled = true;
 
                     try
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(retryIntervalSeconds), m_reservedWithdrawCts.Token);
+                        await Task.Delay(TimeSpan.FromSeconds(retryIntervalSec), m_reservedWithdrawCts.Token);
                     }
                     catch (OperationCanceledException)
                     {

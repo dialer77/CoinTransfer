@@ -272,14 +272,16 @@ namespace CoinTransfer
             // 
             // numRetryInterval
             // 
+            numRetryInterval.DecimalPlaces = 2;
             numRetryInterval.Enabled = false;
+            numRetryInterval.Increment = 0.01M;
             numRetryInterval.Location = new Point(491, 328);
-            numRetryInterval.Maximum = new decimal(new int[] { 3600, 0, 0, 0 });
-            numRetryInterval.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            numRetryInterval.Maximum = 3600M;
+            numRetryInterval.Minimum = 0.01M;
             numRetryInterval.Name = "numRetryInterval";
-            numRetryInterval.Size = new Size(55, 23);
+            numRetryInterval.Size = new Size(64, 23);
             numRetryInterval.TabIndex = 24;
-            numRetryInterval.Value = new decimal(new int[] { 1, 0, 0, 0 });
+            numRetryInterval.Value = 1.00M;
             // 
             // btnCancelReserved
             // 
